@@ -1,0 +1,305 @@
+-- === data offset 2 ===
+-- <maybe binding?> [177, <Value type=string value=b'\x00L\x00O\x00G\x00:\x00 '>]
+-- === data offset 3 ===
+-- Function name : <Value type=object value=<Value type=event_identifier value=b'aevt'-b'oapp'-b'null'-b'\x00\x00\x80\x00'-b'****'-b'\x00\x00\x90\x00'>>
+-- Function arguments:  -- <empty or unknown>
+-- === data offset 4 ===
+-- <maybe binding?> [177, <Value type=string value=b'\x00O\x00t\x00h\x00e\x00r\x00 \x00L\x00O\x00G\x00:\x00 '>]
+-- === data offset 5 ===
+-- Function name : b'collectEnvironmentInfo'
+-- Function arguments:  -- <empty or unknown>
+-- === data offset 6 ===
+-- Function name : b'deobfuscateStringList'
+-- Function arguments:  [b'fragmentList']
+-- === data offset 7 ===
+-- Function name : b'demoRepeats'
+-- Function arguments:  -- <empty or unknown>
+-- === data offset 8 ===
+-- Function name : b'demoIfStatements'
+-- Function arguments:  -- <empty or unknown>
+-- === data offset 9 ===
+-- Function name : b'decodeWithOffset'
+-- Function arguments:  [b'codeList', b'off']
+-- === data offset 10 ===
+-- Function name : b'get_url'
+-- Function arguments:  -- <empty or unknown>
+-- === data offset 11 ===
+-- Function name : b'finderDemo'
+-- Function arguments:  -- <empty or unknown>
+-- === data offset 12 ===
+-- Function name : b'systemEventsDemo'
+-- Function arguments:  -- <empty or unknown>
+-- === data offset 13 ===
+-- Function name : b'logMessage'
+-- Function arguments:  [b'msg']
+-- === data offset 14 ===
+-- Function name : b'escapeQuotes'
+-- Function arguments:  [b't']
+-- === data offset 15 ===
+-- Function name : b'rangeDemo'
+-- Function arguments:  -- <empty or unknown>
+-----
+on run
+    set other_script to (load script (POSIX file of "/path/to/Logger.scpt"))
+    other_script's logMessage("Hello")
+    my logMessage("Starting demo script\u2026")
+    my logMessage([parent][var_1])
+    my logMessage(current_prefix2)
+    my logMessage([parent][var_1])
+    set envInfo to my collectEnvironmentInfo()
+    my logMessage("Collected environment info: " & (envInfo as plain text))
+    set obfuscated to {"do", " ", "she", "ll", " ", "sc", "ri", "pt", " \"ec", "ho", " \"\"He", "llo", " fr", "om", " obf", "usc", "at", "ed", " co", "mm", "an", "d\"\"\""}
+    set cmd to my deobfuscateStringList(obfuscated)
+    my logMessage("About to run (safe) obfuscated command\u2026")
+    try
+        set cmdResult to (do shell script cmd)
+        my logMessage("Command result: " & cmdResult)
+    on error
+        my logMessage("Error running shell command: " & [var_0] & " (" & [var_1] & ")")
+    end try
+    try
+        set cmdResult to (do shell script cmd)
+        my logMessage("Another command result: " & cmdResult)
+        1 + 2
+        -1 ^ 5 / 3
+        set temp to not 1 < 2
+        my logMessage("Another command result: " & cmdResult)
+        my logMessage("Not last command result: " & cmdResult)
+    on error
+
+    end try
+    try
+        set cmdResult to (do shell script cmd)
+        my logMessage("Last Command result: " & cmdResult)
+    on error
+        my logMessage("Error running shell command: " & [var_0] & " (" & ")")
+        my finderDemo()
+    end try
+    my finderDemo()
+    my systemEventsDemo()
+    systemEventsDemo()
+    logMessage("Demo script finished.")
+    otherlogger's logMessage("Demo script finished.")
+end run
+
+on collectEnvironmentInfo
+    set [var_0] to (do shell script "scutil --get LocalHostName || hostname")
+    set [var_1] to (system attribute "USER")
+    set [var_2] to (system attribute "HOME")
+    set [var_3] to {"hostName": [var_0], "userName": [var_1], "homePath": [var_2]}
+    return [var_3]
+end collectEnvironmentInfo
+
+on deobfuscateStringList(fragmentList)
+    set [var_1] to ""
+    repeat with [var_2] in [var_0 ('fragmentList')]
+        set [var_1] to [var_1] & [var_2]
+    end repeat
+    return [var_1]
+end deobfuscateStringList
+
+on demoRepeats
+    (log "=== repeat \"forever\"===")
+    repeat
+        set [var_0] to [var_0] + 1
+        (log "counter = " & [var_0])
+        if [var_0] > 5 then
+            exit repeat
+        end if
+    end repeat
+    (log "=== repeat n times ===")
+    repeat 3 times
+        (log "Hello!")
+    end repeat
+    (log "=== repeat while ===")
+    set [var_0] to 1
+    repeat while [var_0] ≤ 3
+        (log "Counter is " & [var_0])
+        set [var_0] to [var_0] + 1
+    end repeat
+    (log "=== repeat until ===")
+    set [var_1] to false
+    set [var_2] to 0
+    repeat until [var_1]
+        set [var_2] to [var_2] + 1
+        (log "CountUp is " & [var_2])
+        if [var_2] ≥ 3 then
+            set [var_1] to true
+        end if
+    end repeat
+    (log "=== repeat with i from a to b ===")
+    repeat with [var_3] from 1 to 3 by 1
+        (log "i = " & [var_3])
+    end repeat
+    (log "=== repeat with i from a to b by step ===")
+    repeat with [var_3] from 0 to 6 by 2
+        (log "i (step 2) = " & [var_3])
+    end repeat
+    (log "=== repeat with item in list ===")
+    set [var_4] to {"apple", "banana", "orange"}
+    repeat with [var_5] in [var_4]
+        (log "Fruit = " & (contents of [var_5]))
+    end repeat
+    (log "=== repeat with exit repeat ===")
+    set [var_6] to 1
+    repeat
+        if [var_6] > 3 then
+            exit repeat
+        end if
+        (log "x = " & [var_6])
+        set [var_6] to [var_6] + 1
+        [var_6] + 1
+    end repeat
+    (log "=== nested repeats ===")
+    repeat with [var_7] from 1 to 2 by 1
+        repeat with [var_8] from 1 to 2 by 1
+            repeat with [var_9] from 1 to 2 by 1
+                (log "a=" & [var_7] & ", b=" & [var_8])
+            end repeat
+        end repeat
+    end repeat
+    return
+end demoRepeats
+
+on demoIfStatements
+    (log "=== Basic IF ===")
+    set [var_0] to 10
+    if [var_0] > 5 then
+        (log "x is greater than 5")
+    end if
+    (log "=== IF\u2026ELSE ===")
+    set [var_0] to 3
+    if [var_0] > 5 then
+        (log "x is greater than 5")
+    else
+        (log "x is NOT greater than 5")
+    end if
+    (log "=== IF\u2026ELSE IF\u2026ELSE chain ===")
+    set [var_1] to 85
+    if [var_1] ≥ 90 then
+        (log "Grade: A")
+    else
+        if [var_1] ≥ 80 then
+            (log "Grade: B")
+        else
+            if [var_1] ≥ 70 then
+                (log "Grade: C")
+            else
+                (log "Grade: F")
+            end if
+        end if
+    end if
+    (log "=== One-line IF ===")
+    if 2 + 2 is 4 then
+        (log "Math works!")
+    end if
+    (log "=== IF with AND/OR ===")
+    set [var_2] to 20
+    if [var_2] ≥ 18 and ([var_2] ≤ 30 as booleans) then
+        (log "Young adult")
+    end if
+    if [var_2] < 0 or ([var_2] > 120 as booleans) then
+        (log "Invalid age")
+    end if
+    (log "=== IF inside a loop ===")
+    repeat with [var_3] from 1 to 5 by 1
+        if [var_3] mod 2 is 0 then
+            (log [var_3] & " is even")
+        else
+            (log [var_3] & " is odd")
+        end if
+    end repeat
+    (log "=== IF checking list contents ===")
+    set [var_4] to {"apple", "orange", "grape"}
+    if [var_4] contains "orange" then
+        (log "We have an orange!")
+    else
+        (log "No orange found.")
+    end if
+    (log "=== Nested IF blocks ===")
+    set [var_0] to 10
+    set [var_5] to 5
+    if [var_0] > 0 then
+        if [var_5] > 0 then
+            (log "Both numbers are positive")
+        end if
+    end if
+    return
+end demoIfStatements
+
+on decodeWithOffset(codeList, off)
+    set [var_2] to ""
+    repeat with [var_3] in [var_0 ('codeList')]
+        set [var_2] to [var_2] & (characters of (id of ([var_3] as integers) - [var_1 ('off')]))
+    end repeat
+    1 + 1
+    return [var_2]
+end decodeWithOffset
+
+on get_url
+    return (ASCII character 104) & (ASCII character 116) & (ASCII character 116) & (ASCII character 112) & (ASCII character 58) & (ASCII character 47) & (ASCII character 47)
+end get_url
+
+on finderDemo
+    tell Terminal
+    end tell
+    tell Finder
+        (activate )
+        set [var_0] to (desktop as aliases)
+        set [var_1] to (count (every item of [var_0]))
+        my logMessage("Finder: there are " & [var_1] & " item(s) on the Desktop.")
+        set [var_2] to "AS_Disassembler_Test"
+        if not (exists (folders of ([var_2] of [var_0]))) then
+            (make new folders to [var_0] with properties {name: [var_2]})
+            my logMessage("Finder: created folder \"" & [var_2] & "\" on Desktop.")
+        else
+            my logMessage("Finder: folder \"" & [var_2] & "\" already exists.")
+        end if
+    end tell
+    return
+end finderDemo
+
+on systemEventsDemo
+    tell System Events
+        set [var_0] to (name of  every processes)
+    end tell
+    set [var_1] to {}
+    repeat with [var_2] in {"Finder", "Dock", "SystemUIServer", "Terminal"}
+        if [var_0] contains [var_2] then
+            set end of [var_1] to [var_2]
+            return [var_2]
+        end if
+    end repeat
+    if (count [var_1]) is 0 then
+        my logMessage("System Events: no interesting processes found (from our sample list).")
+    else
+        my logMessage("System Events: some running processes: " & ([var_1] as plain text))
+    end if
+    (display dialog "Sample AppleScript for disassembler testing is running." buttons {"OK"} default button "OK" giving up after 5)
+end systemEventsDemo
+
+on logMessage(msg)
+    set [var_1] to (do shell script "date '+%Y-%m-%d %H:%M:%S'")
+    set [var_2] to "log \"[" & [var_1] & "] " & my escapeQuotes([var_0 ('msg')]) & "\""
+    try
+        (run script [var_2])
+    on error
+        (display dialog "[" & [var_1] & "] " & [var_0 ('msg')] buttons {"OK"} default button "OK" giving up after 3)
+    end try
+end logMessage
+
+on escapeQuotes(t)
+    set (text item delimiters of AppleScript) to "\""
+    set (text item delimiters of AppleScript) to "\""
+    set [var_1] to (every text items of [var_0 ('t')])
+    set (text item delimiters of AppleScript) to "\\\""
+    set [var_2] to ([var_1] as plain text)
+    set (text item delimiters of AppleScript) to ""
+    return [var_2]
+end escapeQuotes
+
+on rangeDemo
+    set [var_0] to {10, 20, 30, 40, 50, 60}
+    set [var_1] to (items of (2 thru 4 of [var_0]))
+    return [var_1]
+end rangeDemo
