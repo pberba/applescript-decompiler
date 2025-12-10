@@ -20,7 +20,7 @@ venv/bin/pip install .
 applescript_decompile <scpt> [--comments]
 ```
 
-`--comments`: adds the decompiled code as comments
+`--comments`: adds the disassembled code as comments
 
 #### Demo
 
