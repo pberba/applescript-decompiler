@@ -6,6 +6,7 @@ from jinmo_applescript_disassembler.engine.util import opcodes, comments
 from jinmo_applescript_disassembler.engine.fasparser import Loader
 
 from applescript_decompiler.ast import *
+from applescript_decompiler.utils import load_object
 
 # Some hardcoded offset in apple script binary
 # root -> (<function index> -> (name, ..., literal, code))
@@ -18,20 +19,12 @@ LITERAL_OFFSET = 5
 CODE_OFFSET = 6
 
 
-def cli():
-    args = parse_args()
-
-    path = args.scpt
-    add_comments = args.comments
-
-    f = Loader()
-    f = f.load(path)
-
+def run_decompiler(f, add_comments=False, force=False, analyzer=None, debug=False):
     root = f[ROOT_OFFSET]
 
     # assert code['kind'] == 'untypedPointerBlock'  # I think it doesn't matter
     def decompile(function_offset, add_comments=False):  # function number
-        state = {"pos": 0, "tab": 0}
+        state = {"pos": 0}
         function = root[function_offset]
 
         print("-- === data offset %d ===" % function_offset)
@@ -39,6 +32,19 @@ def cli():
         if type(function) is not list:
             print("-- <not a function>")
             return
+
+        # In one sample, when t kinda looks like a
+        if function[0] == 15:
+            if force:
+                print(
+                    f"-- {function[NAME_OFFSET + 1]} looks like a script block (?). Recursing."
+                )
+                return run_decompiler(function, add_comments, force)
+            else:
+                print(
+                    f"-- {function[NAME_OFFSET + 1]} looks interesting. Try `--force`"
+                )
+
         if len(function) < 7:
             print("-- <maybe binding?>", function)
             return
@@ -63,8 +69,6 @@ def cli():
             body=[],
         )
 
-        handler_stack = [handler]
-
         code = bytearray(function[CODE_OFFSET + 1].value)
 
         def word():
@@ -86,27 +90,39 @@ def cli():
                 )
             return "[var_%d]" % x
 
+        # Runtime stack
         _stack = []
+
+        # Stack that keeps track of the current block we are writing on.
+        # Maintain as stack to represent things that are "block-ish" like
+        # handlers, if/else, try, repeat, etc
+        block_stack = [handler]
+
         _var = None
         _prev_op = None
 
         while state["pos"] < len(code):
             _curr_pos = state["pos"]
-            _comment = " " * state["tab"] * 4 + " " + "%05x" % state["pos"] + " "
+            _comment = " " + "%05x" % state["pos"] + " "
             c = code[state["pos"]]
             state["pos"] += 1
             op = opcodes[c]
 
             _comment += op + " "
-            _state = []
+            _statements = []
 
+            if debug: 
+                print(_stack)
+                print(_comment, end = ' ')
+
+            # AndOp/OrOp special cases since they have some control flow
+            # but are actuall expressions
             if _stack and (
-                isinstance(handler_stack[-1], AndOp)
-                or isinstance(handler_stack[-1], OrOp)
+                isinstance(block_stack[-1], AndOp) or isinstance(block_stack[-1], OrOp)
             ):
-                if _curr_pos == handler_stack[-1].right_end_pos:
-                    handler_stack[-1].right = _stack.pop()
-                    _op = handler_stack.pop()
+                if _curr_pos == block_stack[-1].right_end_pos:
+                    block_stack[-1].right = _stack.pop()
+                    _op = block_stack.pop()
                     _stack.append(BinaryOp(op=_op.op, left=_op.left, right=_op.right))
 
             if op == "Jump":
@@ -114,18 +130,19 @@ def cli():
                 _comment += hex(_address) + " "
                 # Assume repeat blocks follow proper jump
                 # Use Jump address to infer `else` block for `if-then-else`
-                curr_index = -1
-                while (
-                    isinstance(handler_stack[curr_index], IfStatement)
-                    and handler_stack[curr_index].end_if_pos is not None
+                curr_index = len(block_stack) - 1
+                while curr_index > 0 and (
+                    not isinstance(block_stack[curr_index], IfStatement)
+                    or block_stack[curr_index].end_if_pos is not None
                 ):
                     curr_index -= 1
-                _handler = handler_stack[curr_index]
-                if isinstance(_handler, IfStatement):
-                    _handler.end_if_pos = _address
+                _block = block_stack[curr_index]
+
+                if isinstance(_block, IfStatement):
+                    _block.end_if_pos = _address
                     if _stack:
                         if _var is not None:
-                            _state.append(
+                            _statements.append(
                                 SetStatement(
                                     # TODO: handle generic values
                                     target=LValue(obj=_var),
@@ -134,7 +151,7 @@ def cli():
                             )
                             _var = None
                         else:
-                            _state.append(ExprStatement(expr=_stack.pop()))
+                            _statements.append(ExprStatement(expr=_stack.pop()))
             elif op in ["PushLiteral", "PushLiteralExtended"]:
                 v = word() if "Extended" in op else (c & 0xF)
                 _comment += (
@@ -179,17 +196,19 @@ def cli():
                 _comment += str(v) + " "
                 _var = VariableRef(v)
             elif op == "Dup" and _stack:
-                curr_index = len(handler_stack) - 1
+                curr_index = len(block_stack) - 1
                 # Find enclosing `RepeatStatement`
                 while curr_index > 0 and not isinstance(
-                    handler_stack[curr_index], RepeatStatement
+                    block_stack[curr_index], RepeatStatement
                 ):
                     curr_index -= 1
 
-                _handler = handler_stack[curr_index]
+                _block = block_stack[curr_index]
+                # Repeat blocks have a random Dup in them Not really sure what
+                # they are for. We can just ignore them?
                 if (
-                    isinstance(_handler, RepeatStatement)
-                    and _handler.kind != RepeatKind.FOREVER
+                    isinstance(_block, RepeatStatement)
+                    and _block.kind != RepeatKind.FOREVER
                 ):
                     pass
                 else:
@@ -197,41 +216,33 @@ def cli():
             elif op in BINARY_OP_MAPPING:
                 r = _stack.pop()
                 l = _stack.pop()
-                _op = BinaryOp(op=BINARY_OP_MAPPING[op], left=l, right=r)
-                _stack.append(_op)
+                _stack.append(BinaryOp(op=BINARY_OP_MAPPING[op], left=l, right=r))
             elif op in UNARY_OP_MAPPING:
                 exp = _stack.pop()
-                _op = UnaryOp(op=UNARY_OP_MAPPING[op], operand=exp)
-                _stack.append(_op)
-
+                _stack.append(UnaryOp(op=UNARY_OP_MAPPING[op], operand=exp))
             elif op == "Exit":
-                _handler = handler_stack[-1]
                 # Maybe check current block is repeat?
                 # Should only be during repeat
-                _state.append(ExitRepeat())
+                _statements.append(ExitRepeat())
             elif op == "Tell":
                 _comment += str(word()) + " "
-                state["tab"] += 1
-
                 _target = _stack.pop()
-                _handler = TellBlock(target=_target, body=[])
-                handler_stack.append(_handler)
+                block_stack.append(TellBlock(target=_target, body=[]))
             elif op == "EndTell":
-                state["tab"] -= 1
                 # Look for the containing TellBlock
                 curr_index = -1
-                while not isinstance(handler_stack[curr_index], TellBlock):
+                while not isinstance(block_stack[curr_index], TellBlock):
                     curr_index -= 1
 
-                handler_stack[curr_index].is_done = True
+                block_stack[curr_index].is_done = True
 
                 if _stack and not (
-                    isinstance(handler_stack[curr_index].target, Keyword)
-                    and handler_stack[curr_index].target.value == "misccura"
+                    isinstance(block_stack[curr_index].target, Keyword)
+                    and block_stack[curr_index].target.value == "misccura"
                 ):
                     _curr = _stack.pop()
                     if _var is not None:
-                        _state.append(
+                        _statements.append(
                             SetStatement(
                                 # TODO: handle generic values
                                 target=LValue(obj=_var),
@@ -240,7 +251,7 @@ def cli():
                         )
                         _var = None
                     else:
-                        _state.append(ExprStatement(expr=_curr))
+                        _statements.append(ExprStatement(expr=_curr))
 
             elif op in ("MakeObjectAlias", "MakeComp"):
                 t = c - 23
@@ -317,18 +328,18 @@ def cli():
                 _left = _stack.pop()
 
                 if op == "And":
-                    handler_stack.append(AndOp(left=_left, right_end_pos=_next))
+                    block_stack.append(AndOp(left=_left, right_end_pos=_next))
                 else:
-                    handler_stack.append(OrOp(left=_left, right_end_pos=_next))
+                    block_stack.append(OrOp(left=_left, right_end_pos=_next))
 
             elif op == "TestIf":
                 _else_pos = _curr_pos + 1 + word()
                 _comment += hex(_else_pos)
                 _cond = _stack.pop()
-                _handler = IfStatement(
+                _block = IfStatement(
                     condition=_cond, else_pos=_else_pos, then_block=[], else_block=[]
                 )
-                handler_stack.append(_handler)
+                block_stack.append(_block)
             elif op == "MessageSend":
                 v = word()
                 _comment += str(v) + " # " + str(literal(v))
@@ -343,10 +354,11 @@ def cli():
                     args = _stack[-args_count:]
                     _stack = _stack[:-args_count]
 
-                _command = CommandCall(
-                    command_name=event_code, arguments=[_stack.pop()] + args
+                _stack.append(
+                    CommandCall(
+                        command_name=event_code, arguments=[_stack.pop()] + args
+                    )
                 )
-                _stack.append(_command)
             elif op == "PositionalMessageSend":
                 v = word()
                 _comment += str(v) + " # " + str(literal(v))
@@ -365,14 +377,15 @@ def cli():
                 else:
                     _target = None
 
-                _curr = HandlerCall(
-                    handler_name=literal(v).decode(), arguments=args, target=_target
+                _stack.append(
+                    HandlerCall(
+                        handler_name=literal(v).decode(), arguments=args, target=_target
+                    )
                 )
-                _stack.append(_curr)
             elif op == "StoreResult" and _stack:
                 _curr = _stack.pop()
                 if _var is not None:
-                    _state.append(
+                    _statements.append(
                         SetStatement(
                             # TODO: handle generic values
                             target=LValue(obj=_var),
@@ -381,40 +394,41 @@ def cli():
                     )
                     _var = None
                 else:
-                    _state.append(ExprStatement(expr=_curr))
+                    _statements.append(ExprStatement(expr=_curr))
             elif op == "LinkRepeat":
                 v = word() + _curr_pos + 1
                 _comment += hex(v) + " "
-                _handler = RepeatStatement(
-                    kind=RepeatKind.FOREVER, end_repeat_pos=v  # By default
+                block_stack.append(
+                    RepeatStatement(
+                        kind=RepeatKind.FOREVER, end_repeat_pos=v  # By default
+                    )
                 )
-                handler_stack.append(_handler)
-                state["tab"] += 1
             elif op == "RepeatNTimes":
                 _stack.pop()  # remove PushOne
                 N = _stack.pop()
 
-                _handler = handler_stack[-1]
-                _handler.kind = RepeatKind.TIMES
-                _handler.times = N
+                _block = block_stack[-1]
+                _block.kind = RepeatKind.TIMES
+                _block.times = N
             elif op == "RepeatWhile":
                 cond = _stack.pop()
-                _handler = handler_stack[-1]
-                _handler.kind = RepeatKind.WHILE
-                _handler.condition = cond
+                _block = block_stack[-1]
+                _block.kind = RepeatKind.WHILE
+                _block.condition = cond
             elif op == "RepeatUntil":
                 cond = _stack.pop()
-                _handler = handler_stack[-1]
-                _handler.kind = RepeatKind.UNTIL
-                _handler.condition = cond
+                _block = block_stack[-1]
+                _block.kind = RepeatKind.UNTIL
+                _block.condition = cond
             elif op == "RepeatInCollection":
                 v = variable(word())
                 _stack.pop()  # Push1
                 _stack.pop()  # Result of len(_arr)
                 _arr = _stack.pop()
-                _handler.kind = RepeatKind.WITH_IN
-                _handler.counter_var = VariableRef(v)
-                _handler.in_expr = _arr
+                _block = block_stack[-1]
+                _block.kind = RepeatKind.WITH_IN
+                _block.counter_var = VariableRef(v)
+                _block.in_expr = _arr
             elif op == "RepeatInRange":
                 v = variable(word())
                 _comment += v
@@ -423,23 +437,23 @@ def cli():
                 _to = _stack.pop()
                 _from = _stack.pop()
 
-                _handler = handler_stack[-1]
-                _handler.kind = RepeatKind.WITH_COUNTER
-                _handler.from_expr = _from
-                _handler.to_expr = _to
-                _handler.by_expr = _by
-                _handler.counter_var = VariableRef(v)
+                _block = block_stack[-1]
+                _block.kind = RepeatKind.WITH_COUNTER
+                _block.from_expr = _from
+                _block.to_expr = _to
+                _block.by_expr = _by
+                _block.counter_var = VariableRef(v)
             elif op == "Return":
                 # TODO Make Return Robust
                 if _stack and (
                     isinstance(_stack[-1], CommandCall)
                     or isinstance(_stack[-1], HandlerCall)
                 ):
-                    _state.append(ExprStatement(expr=_stack.pop()))
+                    _statements.append(ExprStatement(expr=_stack.pop()))
                 elif _stack:
-                    _state.append(ReturnStatement(value=_stack.pop()))
+                    _statements.append(ReturnStatement(value=_stack.pop()))
                 elif op != _prev_op:
-                    _state.append(ReturnStatement())
+                    _statements.append(ReturnStatement())
 
             elif op == "MakeVector":
                 vector_length = _stack.pop().value
@@ -447,7 +461,7 @@ def cli():
                     _list = ListLiteral(elements=[])
                 else:
                     _list = ListLiteral(elements=_stack[-vector_length:])
-                _stack = _stack[:-vector_length]
+                    _stack = _stack[:-vector_length]
                 _stack.append(_list)
             elif op == "MakeRecord":
                 record_length = _stack.pop().value
@@ -465,20 +479,36 @@ def cli():
                 pass
             elif op == "ErrorHandler":
                 _comment += " " + hex(_curr_pos + 1 + word())
-                state["tab"] += 1
-                handler_stack.append(TryStatement(try_block=[], on_error_block=[]))
+                block_stack.append(TryStatement(try_block=[], on_error_block=[]))
             elif op == "EndErrorHandler":
                 v = _curr_pos + 1 + word()
                 _comment += " " + hex(v)
-                state["tab"] -= 1
-                if _stack and (
+
+                curr_index = len(block_stack) - 1
+                while curr_index > 0 and not isinstance(
+                    block_stack[curr_index], TryStatement
+                ):
+                    curr_index -= 1
+
+                if _stack and _var is not None:
+                    _statements.append(
+                        SetStatement(
+                            # TODO: handle generic values
+                            target=LValue(obj=_var),
+                            value=_stack.pop(),
+                        )
+                    )
+                    _var = None
+                elif _stack and (
                     isinstance(_stack[-1], CommandCall)
                     or isinstance(_stack[-1], HandlerCall)
                 ):
-                    _state.append(ExprStatement(expr=_stack.pop()))
-                    handler_stack[-1].try_block.extend(_state)
-                    _state = []
-                handler_stack[-1].end_try_pos = v
+                    _statements.append(ExprStatement(expr=_stack.pop()))
+
+                block_stack[curr_index].try_block.extend(_statements)
+                _statements = []
+
+                block_stack[curr_index].end_try_pos = v
             elif op == "HandleError":
                 _comment += " " + variable(word()) + " " + variable(word())
             elif op == "PushParentVariable":
@@ -489,6 +519,25 @@ def cli():
                 v = "[parent]" + variable(word())
                 _comment += " " + str(word()) + " " + v + " "
                 _var = VariableRef(v)
+            elif op == "Error":
+                args_count = _stack.pop()
+                if not isinstance(args_count, NumberLiteral):
+                    args_count = _stack.pop().value
+                    _s = args_count
+                else:
+                    _s = None
+                    args_count = args_count.value
+
+                if args_count == 0:
+                    args = []
+                else:
+                    args = _stack[-args_count:]
+                    _stack = _stack[:-args_count]
+
+                if _s is not None:
+                    args = [_s] + args
+                _stack.pop()
+                _statements.append(CommandCall(command_name="error", arguments=args))
 
             # elif op == 'Quotient':
             #     pass
@@ -507,94 +556,124 @@ def cli():
             else:
                 _comment += "<disassembler not implemented> " + op
 
-            if _comment is not None and add_comments:
-                handler_stack[0].body.append(Comment(comment=_comment))
+            _block = block_stack[-1]
 
-            _handler = handler_stack[-1]
+            if _comment is not None and add_comments:
+                _statements = [Comment(comment=_comment)] + _statements
+                
+            if debug: print(' '.join(_comment.split(' ')[2:]))
 
             _prev_op = op
             while True:
                 while True:
-                    _handler = handler_stack[-1]
-                    if isinstance(_handler, TellBlock):
-                        if _state:
-                            _handler.body.extend(_state)
-                            _state = []
+                    _curr_index = -1
+                    while isinstance(block_stack[_curr_index], AndOp) or isinstance(
+                        block_stack[_curr_index], OrOp
+                    ):
+                        _curr_index -= 1
+
+                    _block = block_stack[_curr_index]
+                    if isinstance(_block, TellBlock):
+                        if _statements:
+                            _block.body.extend(_statements)
+                            _statements = []
                         # If we have encountered an end tell
-                        if _handler.is_done:
+                        if _block.is_done:
                             # Special case to handle (ASCII character X) & (ASCII character X) ... etc
                             # For some reason, this is handled internally as a tell/endtellx
                             if not (
-                                isinstance(_handler.target, Keyword)
-                                and _handler.target.value == "misccura"
+                                isinstance(_block.target, Keyword)
+                                and _block.target.value == "misccura"
                             ):
-                                _state.append(_handler)
-                            handler_stack.pop()
+                                _statements.append(_block)
+                            block_stack.pop()
                             continue
-                    elif isinstance(_handler, TryStatement):
-                        if _state:
-                            if _handler.end_try_pos is not None:
-                                _handler.on_error_block.extend(_state)
+                    elif isinstance(_block, TryStatement):
+                        if _statements:
+                            if _block.end_try_pos is not None:
+                                _block.on_error_block.extend(_statements)
                             else:
-                                _handler.try_block.extend(_state)
-                            _state = []
+                                _block.try_block.extend(_statements)
+                            _statements = []
                         # If we've reached the end address of the try block
                         if (
-                            _handler.end_try_pos is not None
-                            and _curr_pos >= _handler.end_try_pos
+                            _block.end_try_pos is not None
+                            and _curr_pos >= _block.end_try_pos
                         ):
-                            _state.append(handler_stack.pop())
+                            _statements.append(block_stack.pop())
                             continue
-                    elif isinstance(_handler, RepeatStatement):
-                        if _state and (_curr_pos <= _handler.end_repeat_pos):
-                            _handler.body.extend(_state)
-                            _state = []
+                    elif isinstance(_block, RepeatStatement):
+                        if _statements and (_curr_pos <= _block.end_repeat_pos):
+                            _block.body.extend(_statements)
+                            _statements = []
                         # If we've reached the end address of the repeat block
                         if (
-                            _handler.end_repeat_pos is not None
-                            and _curr_pos >= _handler.end_repeat_pos
+                            _block.end_repeat_pos is not None
+                            and _curr_pos >= _block.end_repeat_pos
                         ):
-                            _state.append(handler_stack.pop())
+                            _statements.append(block_stack.pop())
                             continue
-                    elif isinstance(_handler, IfStatement):
+                    elif isinstance(_block, IfStatement):
                         # We need to keep track the end of the if block, from address in TestIf
                         # and the end of the else block, from the address in Jump
-                        if _state and (_curr_pos < _handler.else_pos):
-                            _handler.then_block.extend(_state)
-                            _state = []
-                        elif _handler.end_if_pos is not None:
-                            if _state and (_curr_pos <= _handler.end_if_pos):
-                                _handler.else_block.extend(_state)
-                                _state = []
-                            if _curr_pos == _handler.end_if_pos and _stack:
-                                _handler.else_block.append(_stack.pop())
-                            if _curr_pos == _handler.end_if_pos:
-                                _state.append(handler_stack.pop())
+                        if _statements and (_curr_pos < _block.else_pos):
+                            _block.then_block.extend(_statements)
+                            _statements = []
+                        elif _block.end_if_pos is not None:
+                            if _statements and (_curr_pos <= _block.end_if_pos):
+                                _block.else_block.extend(_statements)
+                                _statements = []
+                            if _curr_pos == _block.end_if_pos and _stack:
+                                _block.else_block.append(_stack.pop())
+                            if _curr_pos == _block.end_if_pos:
+                                _statements.append(block_stack.pop())
                                 continue
-                    else:
-                        if _state:
-                            _handler.body.extend(_state)
+                    elif isinstance(_block, Handler):
+                        if _statements:
+                            _block.body.extend(_statements)
+
                     break
 
                 # If we are at the end of the decompilation, we should
                 # attach all handlers back to the root handler
-                if state["pos"] >= len(code) and len(handler_stack) > 1:
-                    _state.append(handler_stack.pop())
+                if state["pos"] >= len(code) and len(block_stack) > 1:
+                    _statements.append(block_stack.pop())
                 else:
                     break
 
-        return handler_stack[0]
+            # if _comment is not None and add_comments:
+            #     block_stack[0].body.append(Comment(comment=_comment))
+
+        return block_stack[0]
 
     sources = []
     for cur_function_offset in range(2, len(root)):
         try:
             ret = decompile(cur_function_offset, add_comments=add_comments)
             if ret is not None:
-                sources.append(ret.to_source())
-        except:
+                sources.append(ret.to_source(analyzer=analyzer))
+        except Exception as e:
             print("-- Failed to decompile")
+            raise e
     print("-----")
     print("\n\n".join(sources))
+
+
+def cli():
+    args = parse_args()
+
+    path = args.scpt
+    add_comments = args.comments
+
+    analyzer = None
+    if args.analyzer:
+        analyzer = load_object(args.analyzer)
+
+    print(f'-- {path}')
+    print('--')
+    f = Loader()
+    f = f.load(path)
+    run_decompiler(f, add_comments=args.comments, force=args.force, analyzer=analyzer, debug=args.debug)
 
 
 def parse_args():
@@ -603,19 +682,35 @@ def parse_args():
     )
 
     parser.add_argument("scpt", help="Path to a compiled AppleScript .scpt file")
-
     parser.add_argument(
+        "-c",
         "--comments",
         action="store_true",
         help="Include comments in the decompiled output",
     )
+    parser.add_argument(
+        "-f",
+        "--force",
+        action="store_true",
+        help="Recursively traverse to find handlers to force handlers to come out",
+    )
+    parser.add_argument(
+        "-d",
+        "--debug",
+        action="store_true",
+        help="Recursively traverse to find handlers to force handlers to come out",
+    )
+    parser.add_argument(
+        "--analyzer",
+        default=None,
+        help="Dotted path to analyzer class like applescript_decompiler.OSAMinerDecryptAnalyzer, applescript_decompiler.NaiveStringAnalyzer, or  local.MyAnalyzer (for a file in local.py)",
+    )
 
-    # Show help when no arguments at all are passed
-    if len(sys.argv) == 1:
+    try:
+        return parser.parse_args()
+    except:
         parser.print_help()
         sys.exit(1)
-
-    return parser.parse_args()
 
 
 if __name__ == "__main__":

@@ -22,12 +22,23 @@ STANDARD_ADDITIONS = "StandardAdditions"
 class AppleScriptPrinter:
     target = DEFAULT_TARGET
     command = "None"
+    analyzer = None
+
+    def __init__(self, analyzer=None):
+        if analyzer is not None:
+            self.analyzer = analyzer(printer=self)
 
     def visit(self, node, indent: int = 0) -> str:
         if node is None:
             return ""
         method_name = "visit_" + node.__class__.__name__
+
+        if self.analyzer is not None:
+            if hasattr(self.analyzer, method_name):
+                return getattr(self.analyzer, method_name)(node, indent)
+
         method = getattr(self, method_name, self.generic_visit)
+
         return method(node, indent)
 
     def generic_visit(self, node, indent: int = 0) -> str:
@@ -374,8 +385,8 @@ class AppleScriptPrinter:
 
 @dataclass(kw_only=True)
 class Node:
-    def to_source(self, indent: int = 0) -> str:
-        printer = AppleScriptPrinter()
+    def to_source(self, analyzer=None, indent: int = 0) -> str:
+        printer = AppleScriptPrinter(analyzer=analyzer)
         return printer.visit(self, indent=indent)
 
 

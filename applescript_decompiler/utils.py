@@ -6,6 +6,7 @@ import os
 from pprint import pprint
 from collections import defaultdict
 from importlib import resources
+import importlib
 
 
 def parse_sdef(path):
@@ -100,3 +101,24 @@ def get_event_code_mapping():
     # Rename for consistency with sdef
     event_code["StandardAdditions"] = event_code["Standard Additions"]
     return event_code
+
+
+def load_object(dotted_path: str):
+    """
+    Load an object (class, function, etc.) from a dotted path string.
+
+    Examples:
+        "local.decrypt" -> from local import decrypt
+        "pkg.mod.MyClass" -> from pkg.mod import MyClass
+    """
+    try:
+        module_path, attr_name = dotted_path.rsplit(".", 1)
+    except ValueError:
+        raise ValueError(f"Invalid path '{dotted_path}'. Expected format 'module.attr'")
+
+    module = importlib.import_module(module_path)
+
+    try:
+        return getattr(module, attr_name)
+    except AttributeError:
+        raise ImportError(f"Module '{module_path}' has no attribute '{attr_name}'")
