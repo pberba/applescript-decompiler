@@ -701,7 +701,7 @@ def parse_args():
         "-d",
         "--debug",
         action="store_true",
-        help="Recursively traverse to find handlers to force handlers to come out",
+        help="Prints out the disassembled code while decompiling",
     )
     parser.add_argument(
         "--analyzer",
