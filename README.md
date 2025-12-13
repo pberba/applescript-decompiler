@@ -1,6 +1,6 @@
 # AppleScript Decompiler
 
-This decompiles run-only applescript. This is built on top of [Jinmo/applescript-disassembler](https://github.com/Jinmo/applescript-disassembler)
+This decompiles run-only applescript. This is built on top of [Jinmo/applescript-disassembler](https://github.com/Jinmo/applescript-disassembler). See my [blog post for more details](https://pberba.github.io/security/2025/12/14/decompiling-run-only-applescripts/)
 
 ### Installation
 
