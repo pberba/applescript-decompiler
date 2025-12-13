@@ -669,8 +669,14 @@ def cli():
     add_comments = args.comments
 
     analyzer = None
+    analyzer_mapping = {
+        'OSAMinerDecryptAnalyzer': 'applescript_decompiler.OSAMinerDecryptAnalyzer',
+        'NaiveStringAnalyzer': 'applescript_decompiler.NaiveStringAnalyzer'
+
+    }
+
     if args.analyzer:
-        analyzer = load_object(args.analyzer)
+        analyzer = load_object(analyzer_mapping.get(args.analyzer, args.analyzer))
 
     print(f'-- {path}')
     print('--')
@@ -706,7 +712,7 @@ def parse_args():
     parser.add_argument(
         "--analyzer",
         default=None,
-        help="Dotted path to analyzer class like applescript_decompiler.OSAMinerDecryptAnalyzer, applescript_decompiler.NaiveStringAnalyzer, or  local.MyAnalyzer (for a file in local.py)",
+        help="It can be OSAMinerDecryptAnalyzer or NaiveStringAnalyzer or a full dotted path to analyzer class like applescript_decompiler.OSAMinerDecryptAnalyzer, applescript_decompiler.NaiveStringAnalyzer, or  local.MyAnalyzer (for a file in local.py)",
     )
 
     try:
