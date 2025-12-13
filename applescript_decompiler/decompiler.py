@@ -33,7 +33,7 @@ def run_decompiler(f, add_comments=False, force=False, analyzer=None, debug=Fals
             print("-- <not a function>")
             return
 
-        # In one sample, when t kinda looks like a
+        # In one sample, when it kinda looks like a script block?
         if function[0] == 15:
             if force:
                 print(
@@ -342,11 +342,12 @@ def run_decompiler(f, add_comments=False, force=False, analyzer=None, debug=Fals
                 block_stack.append(_block)
             elif op == "MessageSend":
                 v = word()
-                _comment += str(v) + " # " + str(literal(v))
-
                 event_code = number_to_code(
                     literal(v).value.identifier[0]
                 ) + number_to_code(literal(v).value.identifier[1])
+                _comment += str(v) + " (" + event_code  + ") # " + str(literal(v))
+
+               
                 args_count = _stack.pop().value
                 if args_count == 0:
                     args = []
@@ -406,7 +407,7 @@ def run_decompiler(f, add_comments=False, force=False, analyzer=None, debug=Fals
             elif op == "RepeatNTimes":
                 _stack.pop()  # remove PushOne
                 N = _stack.pop()
-
+                _comment += str(N)
                 _block = block_stack[-1]
                 _block.kind = RepeatKind.TIMES
                 _block.times = N
@@ -422,6 +423,7 @@ def run_decompiler(f, add_comments=False, force=False, analyzer=None, debug=Fals
                 _block.condition = cond
             elif op == "RepeatInCollection":
                 v = variable(word())
+                _comment += v
                 _stack.pop()  # Push1
                 _stack.pop()  # Result of len(_arr)
                 _arr = _stack.pop()
@@ -646,17 +648,18 @@ def run_decompiler(f, add_comments=False, force=False, analyzer=None, debug=Fals
 
         return block_stack[0]
 
-    sources = []
+    handlers = []
     for cur_function_offset in range(2, len(root)):
         try:
             ret = decompile(cur_function_offset, add_comments=add_comments)
             if ret is not None:
-                sources.append(ret.to_source(analyzer=analyzer))
+                handlers.append(ret)
         except Exception as e:
             print("-- Failed to decompile")
-            raise e
+            if not force:
+                raise e
     print("-----")
-    print("\n\n".join(sources))
+    print(Script(handlers=handlers).to_source(analyzer=analyzer))
 
 
 def cli():
@@ -692,7 +695,7 @@ def parse_args():
         "-f",
         "--force",
         action="store_true",
-        help="Recursively traverse to find handlers to force handlers to come out",
+        help="Recursively traverse to find handlers to force handlers to come out and ignore errors",
     )
     parser.add_argument(
         "-d",

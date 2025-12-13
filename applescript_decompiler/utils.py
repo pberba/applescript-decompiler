@@ -7,6 +7,8 @@ from pprint import pprint
 from collections import defaultdict
 from importlib import resources
 import importlib
+import importlib.util
+from pathlib import Path
 
 
 def parse_sdef(path):
@@ -108,17 +110,42 @@ def load_object(dotted_path: str):
     Load an object (class, function, etc.) from a dotted path string.
 
     Examples:
-        "local.decrypt" -> from local import decrypt
-        "pkg.mod.MyClass" -> from pkg.mod import MyClass
+        "local.decrypt" -> from local import decrypt   # local.py in CWD
     """
     try:
         module_path, attr_name = dotted_path.rsplit(".", 1)
     except ValueError:
         raise ValueError(f"Invalid path '{dotted_path}'. Expected format 'module.attr'")
 
-    module = importlib.import_module(module_path)
+    try:
+        # First, try normal import (installed/real modules)
+        module = importlib.import_module(module_path)
+    except ModuleNotFoundError as e:
+        # Only fallback if *this* module is missing, not some dependency inside it
+        if e.name != module_path:
+            raise
+
+        # Fallback: treat module_path as a local file in the current working directory
+        rel_path = Path(*module_path.split(".")).with_suffix(".py")
+        file_path = Path.cwd() / rel_path
+
+        if not file_path.exists():
+            # No local file either; re-raise original error
+            raise ModuleNotFoundError(
+                f"Cannot find module '{module_path}' "
+                f"either as an installed module or as '{file_path}'."
+            ) from e
+
+        spec = importlib.util.spec_from_file_location(module_path, file_path)
+        if spec is None or spec.loader is None:
+            raise ImportError(f"Could not load module from '{file_path}'")
+
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[module_path] = module
+        spec.loader.exec_module(module)
 
     try:
         return getattr(module, attr_name)
     except AttributeError:
         raise ImportError(f"Module '{module_path}' has no attribute '{attr_name}'")
+

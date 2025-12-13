@@ -17,10 +17,21 @@ venv/bin/pip install .
 #### Decompiler
 
 ```shell
-applescript_decompile <scpt> [--comments]
-```
+usage: applescript_decompile [-h] [-c] [-f] [-d] [--analyzer ANALYZER] scpt
 
-`--comments`: adds the disassembled code as comments
+AppleScript .scpt decompiler
+
+positional arguments:
+  scpt                 Path to a compiled AppleScript .scpt file
+
+options:
+  -h, --help           show this help message and exit
+  -c, --comments       Include comments in the decompiled output
+  -f, --force          Recursively traverse to find handlers to force handlers to come out and ignore errors
+  -d, --debug          Recursively traverse to find handlers to force handlers to come out
+  --analyzer ANALYZER  Dotted path to analyzer class like applescript_decompiler.OSAMinerDecryptAnalyzer, applescript_decompiler.NaiveStringAnalyzer, or local.MyAnalyzer (for a file in local.py)
+
+```
 
 #### Demo
 
@@ -39,3 +50,4 @@ Decompile output
 ```
 applescript_decompile demo/demo_runonly.scpt > demo/demo_output.out
 ```
+

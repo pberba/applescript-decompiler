@@ -347,11 +347,11 @@ class AppleScriptPrinter:
     def visit_UnaryOp(self, node: UnaryOp, indent: int = 0) -> str:
         operand = self.visit(node.operand, 0)
         if node.op is UnaryOpKind.NEG:
-            return f"-{operand}"
+            return f"-({operand})"
         elif node.op is UnaryOpKind.NOT:
-            return f"not {operand}"
+            return f"not ({operand})"
         elif node.op is UnaryOpKind.END_OF:
-            return f"end of {operand}"
+            return f"end of ({operand})"
         return operand
 
     def visit_CommandCall(self, node: CommandCall, indent: int = 0) -> str:
