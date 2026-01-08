@@ -1,0 +1,3 @@
+[submodule "jinmo_applescript_disassembler"]
+	path = jinmo_applescript_disassembler
+	url = https://github.com/Jinmo/applescript-disassembler.git
