@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "applescript-decompiler"
+version = "1.0.0"
+description = "A decompiler for run-only applescripts"
+authors = [{name = "pberba"}]
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+  "jinmo-applescript-disassembler @ git+https://github.com/pberba/applescript-decompiler#subdirectory=jinmo_applescript_disassembler",
+]
+
+[project.urls]
+Homepage = "https://github.com/pberba/applescript-decompiler"
+
+[project.scripts]
+applescript_decompile = "applescript_decompiler.decompiler:cli"
+
+[tool.setuptools]
+packages = ["applescript_decompiler"]
+
+[tool.setuptools.package-data]
+applescript_decompiler = ["data/*.sdef"]
+
+[tool.uv.sources]
+jinmo-applescript-disassembler = { path = "jinmo_applescript_disassembler" }
