@@ -379,7 +379,7 @@ class AppleScriptPrinter:
             _command_name = f"{EVENT_CODES[DEFAULT_TARGET][node.command_name[4:]]}"
 
         args_src = [self.visit(arg, 0) for arg in node.arguments]
-        if args_src[0] == "__it__":
+        if args_src and args_src[0] == "__it__":
             args_src = args_src[1:]
         args_str = " ".join([e if isinstance(e, str) else e.decode() for e in args_src])
         target_prefix = ""
