@@ -364,6 +364,9 @@ class AppleScriptPrinter:
         prev_command = self.command
         prev_target = self.target
 
+        if node.target is not None:
+            self.target = self.visit(node.target, 0)
+
         _command_name = node.command_name
         if node.command_name in SDEFS[self.target]:
             self.command = _command_name
@@ -381,7 +384,7 @@ class AppleScriptPrinter:
         args_str = " ".join([e if isinstance(e, str) else e.decode() for e in args_src])
         target_prefix = ""
         if node.target is not None:
-            target_prefix = self.visit(node.target, 0) & "'s "  # or "tell" context
+            target_prefix = f"tell application \"{self.visit(node.target, 0)}\" "
 
         self.command = prev_command
         self.target = prev_target
