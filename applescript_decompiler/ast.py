@@ -310,6 +310,11 @@ class AppleScriptPrinter:
         elif node.op is BinaryOpKind.THRU:
             # alternatively f"{left}'s {right}"
             return f"{left} thru {right}"
+        elif node.op is BinaryOpKind.GET_INDEXED:
+            # alternatively f"{left}'s {right}"
+            if right == "__it__" or right == "my":
+                return left
+            return f"{left} {right}"
         elif node.op is BinaryOpKind.GET_PROPERTY:
             # alternatively f"{left}'s {right}"
             if right == "__it__" or right == "my":
@@ -339,6 +344,7 @@ class AppleScriptPrinter:
             BinaryOpKind.CONTAINS: "contains",
             BinaryOpKind.COERCE: "as",  # handled specially
             BinaryOpKind.GET_PROPERTY: "'s",  # handled specially
+            BinaryOpKind.GET_INDEXED: "_",    # handled specially
             BinaryOpKind.AND: "and",
             BinaryOpKind.OR: "or",
         }
@@ -594,6 +600,7 @@ class BinaryOpKind(Enum):
     COERCE = auto()  # x as type
     CONTAINS = auto()
 
+    GET_INDEXED = auto()  # X Y
     GET_PROPERTY = auto()  # X of Y
     EVERY = auto()  # every X of Y
     THRU = auto()  # X thru Y

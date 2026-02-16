@@ -281,6 +281,9 @@ on finderDemo()
 		else
 			my logMessage("Finder: folder \"" & tempFolderName & "\" already exists.")
 		end if
+
+		-- Add nested
+		get name extension of file "file.png" of folder "Downloads" of folder "Mary" of folder "Users" of startup disk
 	end tell
 end finderDemo
 
