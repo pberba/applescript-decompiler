@@ -246,7 +246,7 @@ class AppleScriptPrinter:
                 return params[node.value]["name"]
 
         if node.value in SDEFS[STANDARD_ADDITIONS]:
-            return f"{SDEFS[self.target][node.value]['name']}"
+            return f"{SDEFS[STANDARD_ADDITIONS][node.value]['name']}"
 
         if node.value in EVENT_CODES[self.target]:
             return f"{EVENT_CODES[self.target][node.value]}"
@@ -310,6 +310,11 @@ class AppleScriptPrinter:
         elif node.op is BinaryOpKind.THRU:
             # alternatively f"{left}'s {right}"
             return f"{left} thru {right}"
+        elif node.op is BinaryOpKind.GET_INDEXED:
+            # alternatively f"{left}'s {right}"
+            if right == "__it__" or right == "my":
+                return left
+            return f"{left} {right}"
         elif node.op is BinaryOpKind.GET_PROPERTY:
             # alternatively f"{left}'s {right}"
             if right == "__it__" or right == "my":
@@ -339,6 +344,7 @@ class AppleScriptPrinter:
             BinaryOpKind.CONTAINS: "contains",
             BinaryOpKind.COERCE: "as",  # handled specially
             BinaryOpKind.GET_PROPERTY: "'s",  # handled specially
+            BinaryOpKind.GET_INDEXED: "_",    # handled specially
             BinaryOpKind.AND: "and",
             BinaryOpKind.OR: "or",
         }
@@ -358,6 +364,9 @@ class AppleScriptPrinter:
         prev_command = self.command
         prev_target = self.target
 
+        if node.target is not None:
+            self.target = self.visit(node.target, 0)
+
         _command_name = node.command_name
         if node.command_name in SDEFS[self.target]:
             self.command = _command_name
@@ -370,12 +379,12 @@ class AppleScriptPrinter:
             _command_name = f"{EVENT_CODES[DEFAULT_TARGET][node.command_name[4:]]}"
 
         args_src = [self.visit(arg, 0) for arg in node.arguments]
-        if args_src[0] == "__it__":
+        if args_src and args_src[0] == "__it__":
             args_src = args_src[1:]
         args_str = " ".join([e if isinstance(e, str) else e.decode() for e in args_src])
         target_prefix = ""
         if node.target is not None:
-            target_prefix = self.visit(node.target, 0) & "'s "  # or "tell" context
+            target_prefix = f"tell application \"{self.visit(node.target, 0)}\" "
 
         self.command = prev_command
         self.target = prev_target
@@ -594,6 +603,7 @@ class BinaryOpKind(Enum):
     COERCE = auto()  # x as type
     CONTAINS = auto()
 
+    GET_INDEXED = auto()  # X Y
     GET_PROPERTY = auto()  # X of Y
     EVERY = auto()  # every X of Y
     THRU = auto()  # X thru Y

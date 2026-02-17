@@ -280,10 +280,9 @@ def run_decompiler(f, add_comments=False, force=False, analyzer=None, debug=Fals
 
                     target = _stack.pop()
 
-                    l = BinaryOp(op=BinaryOpKind.GET_PROPERTY, left=l, right=target)
-
+                    l = BinaryOp(op=BinaryOpKind.GET_INDEXED, left=r, right=l)
                     _stack.append(
-                        BinaryOp(op=BinaryOpKind.GET_PROPERTY, left=r, right=l)
+                        BinaryOp(op=BinaryOpKind.GET_PROPERTY, left=l, right=target)
                     )
                 elif "GetKeyFrom" in sub_operation:
                     # Also not sure if this is correct
@@ -717,7 +716,7 @@ def parse_args():
 
     try:
         return parser.parse_args()
-    except:
+    except Exception:
         parser.print_help()
         sys.exit(1)
 

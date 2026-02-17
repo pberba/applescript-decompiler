@@ -4,12 +4,20 @@ This decompiles run-only applescript. This is built on top of [Jinmo/applescript
 
 ### Installation
 
+#### pip
+
+```shell
+pip install git+https://github.com/pberba/applescript-decompiler
+```
+
+#### uv
+
 ```shell
 git clone https://github.com/pberba/applescript-decompiler
 cd applescript-decompiler
 
-python3 -m venv venv
-venv/bin/pip install .
+uv run sync
+# uv run applescript_decompile ...
 ```
 
 ### Usage
