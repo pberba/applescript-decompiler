@@ -246,7 +246,7 @@ class AppleScriptPrinter:
                 return params[node.value]["name"]
 
         if node.value in SDEFS[STANDARD_ADDITIONS]:
-            return f"{SDEFS[self.target][node.value]['name']}"
+            return f"{SDEFS[STANDARD_ADDITIONS][node.value]['name']}"
 
         if node.value in EVENT_CODES[self.target]:
             return f"{EVENT_CODES[self.target][node.value]}"
