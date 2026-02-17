@@ -1,6 +1,7 @@
 import struct
 import sys
 import argparse
+import logging
 
 from jinmo_applescript_disassembler.engine.util import opcodes, comments
 from jinmo_applescript_disassembler.engine.fasparser import Loader
@@ -27,41 +28,41 @@ def run_decompiler(f, add_comments=False, force=False, analyzer=None, debug=Fals
         state = {"pos": 0}
         function = root[function_offset]
 
-        print("-- === data offset %d ===" % function_offset)
+        logging.info("-- === data offset %d ===" % function_offset)
 
         if type(function) is not list:
-            print("-- <not a function>")
+            logging.warning("-- <not a function>")
             return
 
         # In one sample, when it kinda looks like a script block?
         if function[0] == 15:
             if force:
-                print(
+                logging.info(
                     f"-- {function[NAME_OFFSET + 1]} looks like a script block (?). Recursing."
                 )
                 return run_decompiler(function, add_comments, force)
             else:
-                print(
+                logging.info(
                     f"-- {function[NAME_OFFSET + 1]} looks interesting. Try `--force`"
                 )
 
         if len(function) < 7:
-            print("-- <maybe binding?>", function)
+            logging.info(f"-- <maybe binding?> {function}")
             return
 
         literals = function[LITERAL_OFFSET + 1]
         name = function[NAME_OFFSET + 1]
         args = function[ARGS_OFFSET + 1]
 
-        print("-- Function name :", name)
-        print("-- Function arguments: ", end=" ")
+        logging.info(f"-- Function name: {name}")
+        logging.info(f"-- Function arguments: {args}")
 
         _args = []
         if isinstance(args, list) and len(args) >= 3 and isinstance(args[2], list):
-            print(args[2][1:])
+            logging.info(args[2][1:])
             _args = args[2][1:]
         else:
-            print("-- <empty or unknown>")
+            logging.info("-- <empty or unknown>")
 
         handler = Handler(
             name=name.decode() if isinstance(name, bytes) else name,
@@ -72,7 +73,7 @@ def run_decompiler(f, add_comments=False, force=False, analyzer=None, debug=Fals
         code = bytearray(function[CODE_OFFSET + 1].value)
 
         def word():
-            r = struct.unpack(">H", code[state["pos"] : state["pos"] + 2])[0]
+            r = struct.unpack(">H", code[state["pos"]: state["pos"] + 2])[0]
             state["pos"] += 2
             return r - 0x10000 if r & 0x8000 else r
 
@@ -111,9 +112,8 @@ def run_decompiler(f, add_comments=False, force=False, analyzer=None, debug=Fals
             _comment += op + " "
             _statements = []
 
-            if debug: 
-                print(_stack)
-                print(_comment, end = ' ')
+            logging.debug(_stack)
+            logging.debug(_comment)
 
             # AndOp/OrOp special cases since they have some control flow
             # but are actuall expressions
@@ -314,7 +314,7 @@ def run_decompiler(f, add_comments=False, force=False, analyzer=None, debug=Fals
                         )
                     )
                 else:
-                    print(f"-- Warning {op}:{sub_operation} is not implemented")
+                    logging.warning(f"-- Warning {op}:{sub_operation} is not implemented")
                     _comment += " (not implemented)"
                     _stack.pop()
             elif op == "SetData":
@@ -344,9 +344,8 @@ def run_decompiler(f, add_comments=False, force=False, analyzer=None, debug=Fals
                 event_code = number_to_code(
                     literal(v).value.identifier[0]
                 ) + number_to_code(literal(v).value.identifier[1])
-                _comment += str(v) + " (" + event_code  + ") # " + str(literal(v))
+                _comment += str(v) + " (" + event_code + ") # " + str(literal(v))
 
-               
                 args_count = _stack.pop().value
                 if args_count == 0:
                     args = []
@@ -561,8 +560,8 @@ def run_decompiler(f, add_comments=False, force=False, analyzer=None, debug=Fals
 
             if _comment is not None and add_comments:
                 _statements = [Comment(comment=_comment)] + _statements
-                
-            if debug: print(' '.join(_comment.split(' ')[2:]))
+
+            logging.debug(' '.join(_comment.split(' ')[2:]))
 
             _prev_op = op
             while True:
@@ -654,11 +653,11 @@ def run_decompiler(f, add_comments=False, force=False, analyzer=None, debug=Fals
             if ret is not None:
                 handlers.append(ret)
         except Exception as e:
-            print("-- Failed to decompile")
+            logging.warning("-- Failed to decompile")
             if not force:
                 raise e
-    print("-----")
-    print(Script(handlers=handlers).to_source(analyzer=analyzer))
+    logging.info("-----")
+    logging.info(Script(handlers=handlers).to_source(analyzer=analyzer))
 
 
 def cli():
@@ -677,8 +676,13 @@ def cli():
     if args.analyzer:
         analyzer = load_object(analyzer_mapping.get(args.analyzer, args.analyzer))
 
-    print(f'-- {path}')
-    print('--')
+    if args.debug:
+        logging.basicConfig(level=logging.DEBUG, format='%(message)s')
+    else:
+        logging.basicConfig(level=logging.INFO, format='%(message)s')
+
+    logging.info(f'-- {path}')
+    logging.info('--')
     f = Loader()
     f = f.load(path)
     run_decompiler(f, add_comments=args.comments, force=args.force, analyzer=analyzer, debug=args.debug)
