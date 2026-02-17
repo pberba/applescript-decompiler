@@ -716,7 +716,7 @@ def parse_args():
 
     try:
         return parser.parse_args()
-    except:
+    except Exception:
         parser.print_help()
         sys.exit(1)
 
