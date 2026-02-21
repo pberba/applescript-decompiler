@@ -54,7 +54,7 @@ class NaiveStringAnalyzer(AbstractAnalyzer):
             return s[0] == '"' and s[-1] == '"' and " & " not in s
 
         if is_string(l) and is_string(r):
-            return f'"{l.strip('"')}{r.strip('"')}"'
+            return '"%s%s"' % (l.strip('"'), r.strip('"'))
 
         return f"{l} & {r}"
 

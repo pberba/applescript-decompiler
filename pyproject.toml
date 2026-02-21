@@ -4,11 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "applescript-decompiler"
-version = "1.0.1"
+version = "1.0.2"
 description = "A decompiler for run-only applescripts"
 authors = [{name = "pberba"}]
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.11"
 dependencies = [
   "jinmo-applescript-disassembler @ git+https://github.com/pberba/applescript-decompiler#subdirectory=jinmo_applescript_disassembler",
 ]
