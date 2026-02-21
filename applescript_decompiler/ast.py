@@ -392,7 +392,7 @@ class AppleScriptPrinter:
         return f"{self._i(indent)}({target_prefix}{_command_name} {args_str})"
 
 
-@dataclass(kw_only=True)
+@dataclass
 class Node:
     def to_source(self, analyzer=None, indent: int = 0) -> str:
         printer = AppleScriptPrinter(analyzer=analyzer)
