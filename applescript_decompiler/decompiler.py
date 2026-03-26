@@ -297,12 +297,30 @@ def run_decompiler(f, add_comments=False, force=False, analyzer=None, debug=Fals
                     )
                 elif "GetRange" in sub_operation:
                     _comment += str(_stack)
-                    _to = _stack.pop()
-                    _from = _stack.pop()
-                    _prop = _stack.pop()
-                    _stack.pop()
-                    _var = _stack.pop()
-                    _stack.pop()
+                    # Normal case: stack holds [obj, obj, prop, prop, from, to]
+                    # (the duplicate obj/prop copies come from Dup opcodes that
+                    # run outside of repeat blocks).  Inside repeat bodies those
+                    # Dups are suppressed, so the stack is only [obj, prop, from, to].
+                    # Handle both depths so we don't crash without --force.
+                    if len(_stack) >= 6:
+                        _to   = _stack.pop()
+                        _from = _stack.pop()
+                        _prop = _stack.pop()
+                        _stack.pop()        # discard duplicate prop copy
+                        _var  = _stack.pop()
+                        _stack.pop()        # discard duplicate obj copy
+                    elif len(_stack) >= 4:
+                        _to   = _stack.pop()
+                        _from = _stack.pop()
+                        _prop = _stack.pop()
+                        _var  = _stack.pop()
+                    else:
+                        # Stack too shallow to form a valid range expression;
+                        # drain whatever is left and emit a placeholder.
+                        while _stack:
+                            _stack.pop()
+                        _stack.append(VariableRef("__range_error__"))
+                        continue
                     _range = BinaryOp(op=BinaryOpKind.THRU, left=_from, right=_to)
 
                     _range_of = BinaryOp(
@@ -372,14 +390,20 @@ def run_decompiler(f, add_comments=False, force=False, analyzer=None, debug=Fals
 
                 if _stack:
                     _target = _stack.pop()
-                    if _target.name == "__it__":
+                    # Target may be a VariableRef (e.g. `my`) or any expression
+                    # node such as a BinaryOp representing an ObjC class reference
+                    # (e.g. `NSTask of current application`).  Only VariableRef
+                    # nodes have a `.name` attribute, so use getattr here.
+                    if getattr(_target, 'name', None) == "__it__":
                         _target = None
                 else:
                     _target = None
 
+                lit = literal(v)
+                handler_name = lit.decode() if isinstance(lit, bytes) else str(lit)
                 _stack.append(
                     HandlerCall(
-                        handler_name=literal(v).decode(), arguments=args, target=_target
+                        handler_name=handler_name, arguments=args, target=_target
                     )
                 )
             elif op == "StoreResult" and _stack:
@@ -540,20 +564,52 @@ def run_decompiler(f, add_comments=False, force=False, analyzer=None, debug=Fals
                 _stack.pop()
                 _statements.append(CommandCall(command_name="error", arguments=args))
 
-            # elif op == 'Quotient':
-            #     pass
+            elif op == "Quotient":
+                r = _stack.pop()
+                l = _stack.pop()
+                _stack.append(BinaryOp(op=BinaryOpKind.DIV, left=l, right=r))
+            elif op == "StartsWith":
+                r = _stack.pop()
+                l = _stack.pop()
+                _stack.append(BinaryOp(op=BinaryOpKind.STARTS_WITH, left=l, right=r))
+            elif op == "EndsWith":
+                r = _stack.pop()
+                l = _stack.pop()
+                _stack.append(BinaryOp(op=BinaryOpKind.ENDS_WITH, left=l, right=r))
+            elif op == "Pop":
+                # TODO: Pop should discard the top stack item.  Implementing it
+                # naively breaks `GetRange` handling: that opcode relies on
+                # phantom items left by Dup/GCSwap sequences to hit its expected
+                # 6-item stack depth.  Treat as a no-op until GetRange is
+                # refactored to deal with the correct (shorter) stack shape.
+                pass
+            elif op == "GCSwap":
+                # TODO: GCSwap reorders the stack (likely swaps top two items).
+                # Implementing it changes the stack shape and breaks `GetRange`
+                # which was designed around this being a no-op.  Leave as no-op
+                # until GetRange semantics are understood and fixed together.
+                pass
             # elif op == 'GetResult':
             #     pass
-            # elif op == 'StartsWith':
-            #     pass
-            # elif op == 'EndsWith':
-            #     pass
-            # elif op == 'Pop':
-            #     pass
-            # elif op == 'DefineActor':
-            #     print(hex(word()), end=' ')
-            # elif op == 'EndDefineActor':
-            #     pass
+            elif op == "DefineActor":
+                # DefineActor defines a local script object variable.  The word
+                # is the byte offset from the current position to EndDefineActor
+                # (used by the runtime to skip the actor body).  We must consume
+                # it to keep the bytecode position aligned; failure to do so
+                # shifts all subsequent opcode reads by 2 bytes.
+                _end = _curr_pos + 1 + word()
+                _comment += hex(_end)
+                # The stack holds [name_literal, script_definition].  Pop both
+                # so they don't corrupt subsequent binary-op handlers.
+                _defn = _stack.pop() if _stack else None
+                _name_node = _stack.pop() if _stack else None
+                if _name_node is not None:
+                    _name = getattr(_name_node, 'value', str(_name_node))
+                    _statements.append(
+                        Comment(comment=f"-- script object: {_name}")
+                    )
+            elif op == "EndDefineActor":
+                pass  # paired with DefineActor above
             else:
                 _comment += "<disassembler not implemented> " + op
 
@@ -654,7 +710,7 @@ def run_decompiler(f, add_comments=False, force=False, analyzer=None, debug=Fals
             if ret is not None:
                 handlers.append(ret)
         except Exception as e:
-            print("-- Failed to decompile")
+            print(f"-- Failed to decompile ({type(e).__name__}: {e})")
             if not force:
                 raise e
     print("-----")

@@ -345,6 +345,8 @@ class AppleScriptPrinter:
             BinaryOpKind.COERCE: "as",  # handled specially
             BinaryOpKind.GET_PROPERTY: "'s",  # handled specially
             BinaryOpKind.GET_INDEXED: "_",    # handled specially
+            BinaryOpKind.STARTS_WITH: "starts with",
+            BinaryOpKind.ENDS_WITH: "ends with",
             BinaryOpKind.AND: "and",
             BinaryOpKind.OR: "or",
         }
@@ -608,6 +610,9 @@ class BinaryOpKind(Enum):
     EVERY = auto()  # every X of Y
     THRU = auto()  # X thru Y
     GENERIC_ALIAS = auto()
+
+    STARTS_WITH = auto()
+    ENDS_WITH = auto()
 
     AND = auto()
     OR = auto()
