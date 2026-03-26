@@ -101,6 +101,14 @@ def run_decompiler(f, add_comments=False, force=False, analyzer=None, debug=Fals
         _var = None
         _prev_op = None
 
+        def emit_store_or_expr(value):
+            nonlocal _var
+            if _var is not None:
+                _statements.append(SetStatement(target=LValue(obj=_var), value=value))
+                _var = None
+            else:
+                _statements.append(ExprStatement(expr=value))
+
         while state["pos"] < len(code):
             _curr_pos = state["pos"]
             _comment = " " + "%05x" % state["pos"] + " "
@@ -141,17 +149,7 @@ def run_decompiler(f, add_comments=False, force=False, analyzer=None, debug=Fals
                 if isinstance(_block, IfStatement):
                     _block.end_if_pos = _address
                     if _stack:
-                        if _var is not None:
-                            _statements.append(
-                                SetStatement(
-                                    # TODO: handle generic values
-                                    target=LValue(obj=_var),
-                                    value=_stack.pop(),
-                                )
-                            )
-                            _var = None
-                        else:
-                            _statements.append(ExprStatement(expr=_stack.pop()))
+                        emit_store_or_expr(_stack.pop())
             elif op in ["PushLiteral", "PushLiteralExtended"]:
                 v = word() if "Extended" in op else (c & 0xF)
                 _comment += (
@@ -196,23 +194,7 @@ def run_decompiler(f, add_comments=False, force=False, analyzer=None, debug=Fals
                 _comment += str(v) + " "
                 _var = VariableRef(v)
             elif op == "Dup" and _stack:
-                curr_index = len(block_stack) - 1
-                # Find enclosing `RepeatStatement`
-                while curr_index > 0 and not isinstance(
-                    block_stack[curr_index], RepeatStatement
-                ):
-                    curr_index -= 1
-
-                _block = block_stack[curr_index]
-                # Repeat blocks have a random Dup in them Not really sure what
-                # they are for. We can just ignore them?
-                if (
-                    isinstance(_block, RepeatStatement)
-                    and _block.kind != RepeatKind.FOREVER
-                ):
-                    pass
-                else:
-                    _stack.append(_stack[-1])
+                _stack.append(_stack[-1])
             elif op in BINARY_OP_MAPPING:
                 r = _stack.pop()
                 l = _stack.pop()
@@ -240,18 +222,7 @@ def run_decompiler(f, add_comments=False, force=False, analyzer=None, debug=Fals
                     isinstance(block_stack[curr_index].target, Keyword)
                     and block_stack[curr_index].target.value == "misccura"
                 ):
-                    _curr = _stack.pop()
-                    if _var is not None:
-                        _statements.append(
-                            SetStatement(
-                                # TODO: handle generic values
-                                target=LValue(obj=_var),
-                                value=_curr,
-                            )
-                        )
-                        _var = None
-                    else:
-                        _statements.append(ExprStatement(expr=_curr))
+                    emit_store_or_expr(_stack.pop())
 
             elif op in ("MakeObjectAlias", "MakeComp"):
                 t = c - 23
@@ -297,34 +268,30 @@ def run_decompiler(f, add_comments=False, force=False, analyzer=None, debug=Fals
                     )
                 elif "GetRange" in sub_operation:
                     _comment += str(_stack)
-                    # Normal case: stack holds [obj, obj, prop, prop, from, to]
-                    # (the duplicate obj/prop copies come from Dup opcodes that
-                    # run outside of repeat blocks).  Inside repeat bodies those
-                    # Dups are suppressed, so the stack is only [obj, prop, from, to].
-                    # Handle both depths so we don't crash without --force.
+                    # Outside repeat bodies the compiler emits Dup to duplicate
+                    # obj and prop, giving [obj, obj, prop, prop, from, to] (6 items).
+                    # Inside repeat bodies GCSwap+Pop pairs cancel each Dup, giving
+                    # [obj, prop, from, to] (4 items).  Handle both depths.
                     if len(_stack) >= 6:
                         _to   = _stack.pop()
                         _from = _stack.pop()
                         _prop = _stack.pop()
-                        _stack.pop()        # discard duplicate prop copy
-                        _var  = _stack.pop()
-                        _stack.pop()        # discard duplicate obj copy
+                        _stack.pop()        # discard duplicate prop
+                        _obj  = _stack.pop()
+                        _stack.pop()        # discard duplicate obj
                     elif len(_stack) >= 4:
                         _to   = _stack.pop()
                         _from = _stack.pop()
                         _prop = _stack.pop()
-                        _var  = _stack.pop()
+                        _obj  = _stack.pop()
                     else:
-                        # Stack too shallow to form a valid range expression;
-                        # drain whatever is left and emit a placeholder.
                         while _stack:
                             _stack.pop()
                         _stack.append(VariableRef("__range_error__"))
                         continue
                     _range = BinaryOp(op=BinaryOpKind.THRU, left=_from, right=_to)
-
                     _range_of = BinaryOp(
-                        op=BinaryOpKind.GET_PROPERTY, left=_range, right=_var
+                        op=BinaryOpKind.GET_PROPERTY, left=_range, right=_obj
                     )
                     _stack.append(
                         BinaryOp(
@@ -407,18 +374,7 @@ def run_decompiler(f, add_comments=False, force=False, analyzer=None, debug=Fals
                     )
                 )
             elif op == "StoreResult" and _stack:
-                _curr = _stack.pop()
-                if _var is not None:
-                    _statements.append(
-                        SetStatement(
-                            # TODO: handle generic values
-                            target=LValue(obj=_var),
-                            value=_curr,
-                        )
-                    )
-                    _var = None
-                else:
-                    _statements.append(ExprStatement(expr=_curr))
+                emit_store_or_expr(_stack.pop())
             elif op == "LinkRepeat":
                 v = word() + _curr_pos + 1
                 _comment += hex(v) + " "
@@ -516,14 +472,7 @@ def run_decompiler(f, add_comments=False, force=False, analyzer=None, debug=Fals
                     curr_index -= 1
 
                 if _stack and _var is not None:
-                    _statements.append(
-                        SetStatement(
-                            # TODO: handle generic values
-                            target=LValue(obj=_var),
-                            value=_stack.pop(),
-                        )
-                    )
-                    _var = None
+                    emit_store_or_expr(_stack.pop())
                 elif _stack and (
                     isinstance(_stack[-1], CommandCall)
                     or isinstance(_stack[-1], HandlerCall)
@@ -576,19 +525,10 @@ def run_decompiler(f, add_comments=False, force=False, analyzer=None, debug=Fals
                 r = _stack.pop()
                 l = _stack.pop()
                 _stack.append(BinaryOp(op=BinaryOpKind.ENDS_WITH, left=l, right=r))
-            elif op == "Pop":
-                # TODO: Pop should discard the top stack item.  Implementing it
-                # naively breaks `GetRange` handling: that opcode relies on
-                # phantom items left by Dup/GCSwap sequences to hit its expected
-                # 6-item stack depth.  Treat as a no-op until GetRange is
-                # refactored to deal with the correct (shorter) stack shape.
-                pass
-            elif op == "GCSwap":
-                # TODO: GCSwap reorders the stack (likely swaps top two items).
-                # Implementing it changes the stack shape and breaks `GetRange`
-                # which was designed around this being a no-op.  Leave as no-op
-                # until GetRange semantics are understood and fixed together.
-                pass
+            elif op == "Pop" and _stack:
+                _stack.pop()
+            elif op == "GCSwap" and len(_stack) >= 2:
+                _stack[-1], _stack[-2] = _stack[-2], _stack[-1]
             # elif op == 'GetResult':
             #     pass
             elif op == "DefineActor":
