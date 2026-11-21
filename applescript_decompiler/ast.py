@@ -31,6 +31,9 @@ CONSIDERATIONS = {
 INDENT_STR = "    "  # 4 spaces
 DEFAULT_TARGET = "AppleScript Language"
 STANDARD_ADDITIONS = "StandardAdditions"
+# single-word AppleScript terms; a handler called with one of these names
+# (e.g. an ObjC method `length`) has to be written |length|
+AS_TERMS = {n for n in EVENT_CODES[DEFAULT_TARGET].values() if n.isidentifier()}
 
 
 class AppleScriptPrinter:
@@ -140,7 +143,10 @@ class AppleScriptPrinter:
                 f"{self.visit(label, 0)}:{self.visit(value, 0)}" for label, value in node.labeled
             )
             return f"{self._i(indent)}{target_src}{node.handler_name} given {given}"
-        return f"{self._i(indent)}{target_src}{node.handler_name}({args_src})"
+        _name = node.handler_name
+        if _name in AS_TERMS:
+            _name = f"|{_name}|"
+        return f"{self._i(indent)}{target_src}{_name}({args_src})"
 
     def visit_SetStatement(self, node: SetStatement, indent: int = 0) -> str:
         target_src = self.visit(node.target, 0)
@@ -355,8 +361,8 @@ class AppleScriptPrinter:
     def visit_VariableRef(self, node: VariableRef, indent: int = 0) -> str:
         if node.name == "my":
             return "me"  # PushMe; possessive uses print `my` themselves
-        if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", node.name):
-            return "|" + node.name + "|"  # e.g. |weird name|
+        if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", node.name) or node.name in AS_TERMS:
+            return "|" + node.name + "|"  # e.g. |weird name|, or |name| (not the keyword)
         return node.name
 
     def visit_ElementSpecifier(self, node: ElementSpecifier, indent: int = 0) -> str:
