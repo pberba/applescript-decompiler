@@ -1,4 +1,3 @@
--- test: no-run
 tell application "Finder"
 	set a to disk "Macintosh HD"
 	set b to item 1 of (every disk whose name is in {"x"})

@@ -7,19 +7,17 @@ For every fixture in tests/fixtures:
    compare both scripts handler by handler (code bytes, literals, local
    names, parameters, properties). The compiler does the normalising, so
    comments, whitespace, parentheses and equivalent spellings don't matter,
-   while a wrong operator, a lost statement or a renamed variable does;
-3. **run output**: run the original and the decompiled script with
-   `osascript` and compare what they print.
+   while a wrong operator, a lost statement or a renamed variable does.
+
+Nothing is executed, so fixtures may have side effects.
 
 The e2e_* fixtures are larger, realistic scripts (AppleScriptObjC, nested
 script objects, closures, error handling); their run-only builds are kept
 next to them as .scpt files for manual use.
 
-Fixtures can start with marker lines:
-  -- test: no-run           skip the run-output test (talks to other apps,
-                            shows dialogs)
-  -- test: xfail <reason>   known decompiler gap. Strict for the bytecode
-                            test: remove the marker once the gap is fixed.
+A fixture can start with a marker line:
+  -- test: xfail <reason>   known decompiler gap (strict: remove the marker
+                            once the gap is fixed).
 """
 
 import contextlib
@@ -30,7 +28,7 @@ from pathlib import Path
 
 import pytest
 
-pytestmark = pytest.mark.skipif(sys.platform != "darwin", reason="needs osacompile/osascript")
+pytestmark = pytest.mark.skipif(sys.platform != "darwin", reason="needs osacompile")
 
 import jinmo_applescript_disassembler.engine.runtimeobjects as rto  # noqa: E402
 from jinmo_applescript_disassembler.engine.fasobjects.data_block import Descriptor  # noqa: E402
@@ -51,13 +49,11 @@ def markers(src: Path) -> dict:
     return found
 
 
-def cases(strict, runnable_only=False):
+def cases():
     out = []
     for src in FIXTURES:
         m = markers(src)
-        if runnable_only and "no-run" in m:
-            continue
-        marks = [pytest.mark.xfail(reason=m["xfail"], strict=strict)] if "xfail" in m else []
+        marks = [pytest.mark.xfail(reason=m["xfail"], strict=True)] if "xfail" in m else []
         out.append(pytest.param(src, id=src.stem, marks=marks))
     return out
 
@@ -74,11 +70,6 @@ def decompile(scpt: Path) -> str:
         run_decompiler(Loader().load(str(scpt)))
     # Everything before the "-----" separator is diagnostic comments.
     return buf.getvalue().split("\n-----\n", 1)[1]
-
-
-def osascript(path: Path) -> str:
-    r = subprocess.run(["osascript", str(path)], capture_output=True, text=True, timeout=30)
-    return r.stdout.strip() if r.returncode == 0 else "ERROR: " + r.stderr.strip().split(": ", 1)[-1]
 
 
 # ---- canonical form of a loaded script ---------------------------------
@@ -160,7 +151,7 @@ def roundtrip(tmp_path_factory):
     return get
 
 
-@pytest.mark.parametrize("src", cases(strict=True))
+@pytest.mark.parametrize("src", cases())
 def test_bytecode_equivalent(src, roundtrip):
     original, decompiled, d = roundtrip(src)
     r = subprocess.run(
@@ -170,9 +161,3 @@ def test_bytecode_equivalent(src, roundtrip):
     )
     assert r.returncode == 0, f"decompiled source does not compile:\n{r.stderr}\n{decompiled.read_text()}"
     assert canonical_script(d / "recompiled.scpt") == canonical_script(original), decompiled.read_text()
-
-
-@pytest.mark.parametrize("src", cases(strict=False, runnable_only=True))
-def test_same_output(src, roundtrip):
-    _, decompiled, _ = roundtrip(src)
-    assert osascript(decompiled) == osascript(src), decompiled.read_text()

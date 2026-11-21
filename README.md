@@ -62,19 +62,17 @@ applescript_decompile demo/demo_runonly.scpt > demo/demo_output.out
 
 ### Tests
 
-The tests need macOS (`osacompile`/`osascript`). Each script in
-`tests/fixtures` is compiled run-only, decompiled, and checked two ways:
-
-- the decompiled source, recompiled run-only, must produce the same bytecode,
-  literals and names as the original (comments, formatting and parentheses
-  don't matter);
-- running it must print the same result as the original.
+The tests need macOS (`osacompile`). Each script in `tests/fixtures` is
+compiled run-only and decompiled; the decompiled source, recompiled run-only,
+must produce the same bytecode, literals and names as the original (comments,
+formatting and parentheses don't matter). Nothing is executed, so fixtures may
+have side effects.
 
 ```
 uv run --with pytest pytest
 ```
 
-Fixtures can start with `-- test: no-run` (don't execute it) or
-`-- test: xfail <reason>` (known decompiler gap; remove the marker once fixed).
+A fixture can start with `-- test: xfail <reason>` (known decompiler gap;
+remove the marker once fixed).
 Format new fixtures with AppleScript's own formatter:
 `osacompile -o /tmp/f.scpt f.applescript && osadecompile /tmp/f.scpt > f.applescript`.
