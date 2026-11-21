@@ -14,6 +14,18 @@ from applescript_decompiler.utils import *
 EVENT_CODES = get_event_code_mapping()
 SDEFS = load_sdefs_from_package()
 
+# considering/ignoring attributes, stored as 'cons' + attribute code
+CONSIDERATIONS = {
+    "conscase": "case",
+    "consdiac": "diacriticals",
+    "conshyph": "hyphens",
+    "conspunc": "punctuation",
+    "conswhit": "white space",
+    "consexpa": "expansion",
+    "consnume": "numeric strings",
+    "consrmte": "application responses",
+}
+
 INDENT_STR = "    "  # 4 spaces
 DEFAULT_TARGET = "AppleScript Language"
 STANDARD_ADDITIONS = "StandardAdditions"
@@ -204,6 +216,19 @@ class AppleScriptPrinter:
             footer = f"{self._i(indent)}end try"
             return f"{header}\n{try_block}\n{footer}"
 
+    def visit_ConsideringBlock(self, node: ConsideringBlock, indent: int = 0) -> str:
+        cons = ", ".join(self.visit(a, 0) for a in node.considering)
+        ign = ", ".join(self.visit(a, 0) for a in node.ignoring)
+        if cons:
+            header = f"considering {cons}" + (f" but ignoring {ign}" if ign else "")
+            footer = "end considering"
+        else:
+            header, footer = f"ignoring {ign}", "end ignoring"
+        body_lines = [self.visit(stmt, indent + 1) for stmt in node.body]
+        return "\n".join(
+            [f"{self._i(indent)}{header}"] + body_lines + [f"{self._i(indent)}{footer}"]
+        )
+
     def visit_TellBlock(self, node: TellBlock, indent: int = 0) -> str:
         target_src = self.visit(node.target, 0)
 
@@ -241,6 +266,8 @@ class AppleScriptPrinter:
 
     def visit_Keyword(self, node: Keyword, indent: int = 0) -> str:
         # naive quoting; you may want to escape quotes
+        if node.value in CONSIDERATIONS:
+            return CONSIDERATIONS[node.value]
 
         if self.command != "None" and node.value in SDEFS[self.target][self.command]:
             params = SDEFS[self.target][node.command_name]["name"]
@@ -529,6 +556,14 @@ class TellBlock(Statement):
 
 
 @dataclass
+class ConsideringBlock(TellBlock):
+    # `considering case but ignoring white space` ... `end considering`.
+    # Shares TellBlock's handling in the decompiler; `target` is unused.
+    considering: List[Expression] = field(default_factory=list)
+    ignoring: List[Expression] = field(default_factory=list)
+
+
+@dataclass
 class ReturnStatement(Statement):
     value: Optional[Expression] = None  # `return` or `return expr`
 
@@ -698,6 +733,12 @@ def number_to_code(num):
 
 
 def convert_literal(lit, target=None):
+    if isinstance(lit, rto.Pair):  # list constant, e.g. considering attributes
+        elements = []
+        while isinstance(lit, rto.Pair) and not isinstance(lit, rto.EmptyPair):
+            elements.append(convert_literal(lit.first))
+            lit = lit.second
+        return ListLiteral(elements=elements)
     if isinstance(lit, list):
         lit = lit[1]
     if isinstance(lit, rto.Object):

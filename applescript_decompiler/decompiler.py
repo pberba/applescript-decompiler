@@ -258,10 +258,25 @@ def run_decompiler(f, add_comments=False, force=False, analyzer=None, debug=Fals
                 _comment += str(word()) + " "
                 _target = _stack.pop()
                 block_stack.append(TellBlock(target=_target, body=[]))
-            elif op == "EndTell":
-                # Look for the containing TellBlock
+            elif op == "Consider":
+                _comment += str(word()) + " "
+                _ignoring = _stack.pop()
+                _considering = _stack.pop()
+                block_stack.append(
+                    ConsideringBlock(
+                        target=None,
+                        body=[],
+                        considering=_considering.elements,
+                        ignoring=_ignoring.elements,
+                    )
+                )
+            elif op == "PushEmpty":
+                _stack.append(ListLiteral(elements=[]))
+            elif op in ("EndTell", "EndConsider"):
+                # Look for the containing TellBlock / ConsideringBlock
+                _kind = TellBlock if op == "EndTell" else ConsideringBlock
                 curr_index = -1
-                while not isinstance(block_stack[curr_index], TellBlock):
+                while not isinstance(block_stack[curr_index], _kind):
                     curr_index -= 1
 
                 block_stack[curr_index].is_done = True
