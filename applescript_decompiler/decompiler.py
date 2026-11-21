@@ -149,7 +149,16 @@ def run_decompiler(f, add_comments=False, force=False, analyzer=None, debug=Fals
                 isinstance(block_stack[-1], AndOp) or isinstance(block_stack[-1], OrOp)
             ):
                 if _curr_pos == block_stack[-1].right_end_pos:
-                    block_stack[-1].right = _stack.pop()
+                    _right = _stack.pop()
+                    # The compiler coerces the right operand: `b as boolean`
+                    if (
+                        isinstance(_right, BinaryOp)
+                        and _right.op is BinaryOpKind.COERCE
+                        and isinstance(_right.right, Keyword)
+                        and _right.right.value == "bool"
+                    ):
+                        _right = _right.left
+                    block_stack[-1].right = _right
                     _op = block_stack.pop()
                     _stack.append(BinaryOp(op=_op.op, left=_op.left, right=_op.right))
 
