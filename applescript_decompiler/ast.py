@@ -253,7 +253,8 @@ class AppleScriptPrinter:
         target_src = self.visit(node.target, 0)
 
         prev_target = self.target
-        self.target = target_src
+        # terminology lookups are keyed by application name
+        self.target = node.target.name if isinstance(node.target, AppRef) else target_src
 
         header = f"{self._i(indent)}tell {target_src}"
         body_lines = [self.visit(stmt, indent + 1) for stmt in node.body]
@@ -321,6 +322,9 @@ class AppleScriptPrinter:
         self, node: MissingValueLiteral, indent: int = 0
     ) -> str:
         return "missing value"
+
+    def visit_AppRef(self, node: AppRef, indent: int = 0) -> str:
+        return f'application "{node.name}"'
 
     def visit_VariableRef(self, node: VariableRef, indent: int = 0) -> str:
         return node.name
@@ -646,6 +650,12 @@ class VariableRef(Expression):
 
 
 @dataclass
+class AppRef(VariableRef):
+    # an application alias literal, e.g. `application "Finder"`
+    pass
+
+
+@dataclass
 class ListLiteral(Expression):
     # `{1, 2, "foo"}`
     elements: List[Expression]
@@ -801,4 +811,4 @@ def convert_literal(lit, target=None):
             app_name = lit.content[51:].split(b".app")[0].decode(errors="ignore")
         else:
             app_name = lit.content.split(b".app/")[0].split(b":")[-1].decode()
-        return VariableRef(name=app_name)
+        return AppRef(name=app_name)
