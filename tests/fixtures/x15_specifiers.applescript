@@ -1,4 +1,3 @@
--- test: xfail `some item of` is not implemented
 set L to {1, 2, 3}
 set m to middle item of L
 set b to beginning of L

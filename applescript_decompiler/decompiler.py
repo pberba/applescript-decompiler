@@ -401,16 +401,34 @@ def decompile_script(
                         BinaryOp(op=BinaryOpKind.GET_PROPERTY, left=l, right=target)
                     )
                 elif "GetKeyFrom" in sub_operation:
-                    # Also not sure if this is correct
-                    l = _stack.pop()
-                    r = _stack.pop()
-                    if l.value == "kfrmID  ":
-                        _type = _stack.pop()
-                        _stack.pop()
-                        l.value += _type.value
-                    _stack.append(
-                        BinaryOp(op=BinaryOpKind.GET_PROPERTY, left=l, right=r)
+                    # stack: container, class, key, key form
+                    # (`window id 5`, `character id 65`, `file named "x"`)
+                    _form = _stack.pop()
+                    _key = _stack.pop()
+                    _cls = _stack.pop()
+                    _obj = _stack.pop()
+                    _kind = {"kfrmID  ": BinaryOpKind.BY_ID, "kfrmname": BinaryOpKind.BY_NAME}.get(
+                        getattr(_form, "value", None), BinaryOpKind.GET_INDEXED
                     )
+                    _stack.append(
+                        BinaryOp(
+                            op=BinaryOpKind.GET_PROPERTY,
+                            left=BinaryOp(op=_kind, left=_cls, right=_key),
+                            right=_obj,
+                        )
+                    )
+                elif sub_operation == "GetSome":
+                    # `some item of L`
+                    _cls = _stack.pop()
+                    _obj = _stack.pop()
+                    _some = BinaryOp(op=BinaryOpKind.GET_INDEXED, left=VariableRef("some"), right=_cls)
+                    _stack.append(BinaryOp(op=BinaryOpKind.GET_PROPERTY, left=_some, right=_obj))
+                elif t in (28, 29):
+                    # `item before X` / `item after X`; stack: container, class
+                    _cls = _stack.pop()
+                    _obj = _stack.pop()
+                    _kind = BinaryOpKind.BEFORE if t == 28 else BinaryOpKind.AFTER
+                    _stack.append(BinaryOp(op=_kind, left=_cls, right=_obj))
                 elif "GetRange" in sub_operation:
                     _comment += str(_stack)
                     # stack: container, class, from, to (GCSwap/Pop already

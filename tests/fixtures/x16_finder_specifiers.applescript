@@ -1,5 +1,4 @@
 -- test: no-run
--- test: xfail `id`/`before`/`after` specifiers
 tell application "Finder"
 	set a to disk "Macintosh HD"
 	set b to item 1 of (every disk whose name is in {"x"})

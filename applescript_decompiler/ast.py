@@ -402,9 +402,17 @@ class AppleScriptPrinter:
                 if type(node.left) is VariableRef:
                     return f"its {left}"  # a user property of `it`
                 return left
+            if isinstance(node.right, BinaryOp) and node.right.op is BinaryOpKind.WHOSE:
+                right = f"({right})"  # item 1 of (every disk whose ...)
             return f"({left} of {right})"
         elif node.op is BinaryOpKind.WHOSE:
             return f"{left} whose {right}"
+        elif node.op in (BinaryOpKind.BY_ID, BinaryOpKind.BY_NAME):
+            if _is_operator(node.right):
+                right = f"({right})"
+            return f"{left} {'id' if node.op is BinaryOpKind.BY_ID else 'named'} {right}"
+        elif node.op in (BinaryOpKind.BEFORE, BinaryOpKind.AFTER):
+            return f"{left} {'before' if node.op is BinaryOpKind.BEFORE else 'after'} ({right})"
         elif node.op is BinaryOpKind.EVERY:
             if left == "__it__":
                 return f" every {right}"
@@ -506,6 +514,10 @@ def _is_operator(node) -> bool:
         BinaryOpKind.EVERY,
         BinaryOpKind.THRU,
         BinaryOpKind.WHOSE,
+        BinaryOpKind.BY_ID,
+        BinaryOpKind.BY_NAME,
+        BinaryOpKind.BEFORE,
+        BinaryOpKind.AFTER,
     )
 
 
@@ -758,6 +770,10 @@ class BinaryOpKind(Enum):
     COERCE = auto()  # x as type
     CONTAINS = auto()
     WHOSE = auto()  # X whose Y
+    BY_ID = auto()  # window id 5
+    BY_NAME = auto()  # file named "x"
+    BEFORE = auto()  # item before X
+    AFTER = auto()  # item after X
     QUOTIENT = auto()  # div
     STARTS_WITH = auto()
     ENDS_WITH = auto()
