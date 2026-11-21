@@ -15,6 +15,7 @@ ROOT_OFFSET = -1
 # function object
 NAME_OFFSET = 0
 ARGS_OFFSET = 2
+LOCALS_OFFSET = 4  # local variable names; kept even in run-only scripts
 LITERAL_OFFSET = 5
 CODE_OFFSET = 6
 
@@ -81,14 +82,14 @@ def run_decompiler(f, add_comments=False, force=False, analyzer=None, debug=Fals
                 return "[L%d]" % x
             return literals[x]
 
+        local_names = function[LOCALS_OFFSET + 1]
+        if not isinstance(local_names, list):
+            local_names = []
+
         def variable(x, local=False):
-            if local and len(_args) > x:
-                _x = _args[x]
-                return "[var_%d (%r)]" % (
-                    x,
-                    _x.decode() if isinstance(_x, bytes) else str(_x),
-                )
-            return "[var_%d]" % x
+            if 0 <= x < len(local_names) and isinstance(local_names[x], bytes):
+                return local_names[x].decode()
+            return "var_%d" % x
 
         # Runtime stack
         _stack = []
