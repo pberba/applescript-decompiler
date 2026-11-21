@@ -203,6 +203,18 @@ def decompile_script(
         _closed_value = None  # value that ended the last closed else branch
         _pattern = []  # targets of a pending `set {a, b} to ...`
 
+        def ending_statement(value):
+            # a statement that ends without StoreResult (last of a handler or
+            # branch): `value`, or the pending assignment of it
+            nonlocal _var, _pattern
+            if _pattern:
+                target, _pattern = ListLiteral(elements=_pattern), []
+            elif _var is not None:
+                target, _var = _var, None
+            else:
+                return ExprStatement(expr=value)
+            return SetStatement(target=LValue(obj=target), value=value)
+
         while state["pos"] < len(code):
             _curr_pos = state["pos"]
             _comment = " " + "%05x" % state["pos"] + " "
@@ -261,17 +273,7 @@ def decompile_script(
                 if isinstance(_block, IfStatement) and _address > _curr_pos:
                     _block.end_if_pos = _address
                     if _stack:
-                        if _var is not None:
-                            _statements.append(
-                                SetStatement(
-                                    # TODO: handle generic values
-                                    target=LValue(obj=_var),
-                                    value=_stack.pop(),
-                                )
-                            )
-                            _var = None
-                        else:
-                            _statements.append(ExprStatement(expr=_stack.pop()))
+                        _statements.append(ending_statement(_stack.pop()))
             elif op in ["PushLiteral", "PushLiteralExtended"]:
                 v = word() if "Extended" in op else (c & 0xF)
                 _comment += (
@@ -731,11 +733,10 @@ def decompile_script(
                 _block.by_expr = _by
                 _block.counter_var = VariableRef(v)
             elif op == "Return":
-                if _stack and _var is not None:
+                if _stack and (_var is not None or _pattern):
                     # The handler's last statement is an assignment: the
                     # implicit Return follows Pop*/SetData with no StoreResult.
-                    _statements.append(SetStatement(target=LValue(obj=_var), value=_stack.pop()))
-                    _var = None
+                    _statements.append(ending_statement(_stack.pop()))
                 elif _stack and state["pos"] >= len(code):
                     # The handler's final, implicit Return: the value is the
                     # result of the last statement, not an explicit `return`.
@@ -790,15 +791,8 @@ def decompile_script(
                 ):
                     curr_index -= 1
 
-                if _stack and _var is not None:
-                    _statements.append(
-                        SetStatement(
-                            # TODO: handle generic values
-                            target=LValue(obj=_var),
-                            value=_stack.pop(),
-                        )
-                    )
-                    _var = None
+                if _stack and (_var is not None or _pattern):
+                    _statements.append(ending_statement(_stack.pop()))
                 elif _stack and (
                     isinstance(_stack[-1], CommandCall)
                     or isinstance(_stack[-1], HandlerCall)
@@ -927,13 +921,7 @@ def decompile_script(
                             ):
                                 # the on-error part's last statement (no StoreResult)
                                 _closed_value = _stack.pop()
-                                if _var is not None:
-                                    _block.on_error_block.append(
-                                        SetStatement(target=LValue(obj=_var), value=_closed_value)
-                                    )
-                                    _var = None
-                                else:
-                                    _block.on_error_block.append(ExprStatement(expr=_closed_value))
+                                _block.on_error_block.append(ending_statement(_closed_value))
                             _statements.append(block_stack.pop())
                             continue
                     elif isinstance(_block, RepeatStatement):
@@ -964,13 +952,7 @@ def decompile_script(
                             ):
                                 # the else branch's last statement (no StoreResult)
                                 _closed_value = _stack.pop()
-                                if _var is not None:
-                                    _block.else_block.append(
-                                        SetStatement(target=LValue(obj=_var), value=_closed_value)
-                                    )
-                                    _var = None
-                                else:
-                                    _block.else_block.append(ExprStatement(expr=_closed_value))
+                                _block.else_block.append(ending_statement(_closed_value))
                             if _curr_pos == _block.end_if_pos:
                                 _statements.append(block_stack.pop())
                                 continue
