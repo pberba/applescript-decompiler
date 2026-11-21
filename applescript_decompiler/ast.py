@@ -973,6 +973,8 @@ def convert_literal(lit, target=None):
         return RecordLiteral(fields=fields)
     if isinstance(lit, float):
         return NumberLiteral(value=lit)
+    if isinstance(lit, int):
+        return NumberLiteral(value=lit)  # integers too large for a Fixnum
     if isinstance(lit, list):
         lit = lit[1]
     if isinstance(lit, rto.Object):
