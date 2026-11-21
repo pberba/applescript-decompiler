@@ -33,6 +33,15 @@ def run_decompiler(f, add_comments=False, force=False, analyzer=None, debug=Fals
 
         if type(function) is not list:
             print("-- <not a function>")
+            # A script-level value that isn't a handler is a property
+            names = root[1] if isinstance(root[1], list) else []
+            if function_offset - 2 < len(names) and isinstance(names[function_offset - 2], bytes):
+                properties.append(
+                    PropertyDecl(
+                        name=names[function_offset - 2].decode(),
+                        initial_value=convert_literal(function),
+                    )
+                )
             return
 
         # In one sample, when it kinda looks like a script block?
@@ -86,6 +95,11 @@ def run_decompiler(f, add_comments=False, force=False, analyzer=None, debug=Fals
         local_names = function[LOCALS_OFFSET + 1]
         if not isinstance(local_names, list):
             local_names = []
+
+        def use_global(v):
+            # Globals used outside the run handler need a `global` declaration
+            if isinstance(name, bytes) and isinstance(v, bytes) and v not in globals_used:
+                globals_used.append(v)
 
         def parent_variable(depth, x):
             # Operands are (depth, index): depth 1 is the enclosing script,
@@ -193,6 +207,7 @@ def run_decompiler(f, add_comments=False, force=False, analyzer=None, debug=Fals
             elif op in ["PushGlobal", "PushGlobalExtended"]:
                 v = literal(word() if "Extended" in op else (c & 0xF))
                 if isinstance(v, bytes):
+                    use_global(v)
                     _stack.append(VariableRef(name=v.decode()))
                 else:
                     _stack.append(convert_literal(v))
@@ -200,6 +215,7 @@ def run_decompiler(f, add_comments=False, force=False, analyzer=None, debug=Fals
             elif op in ["PopGlobal", "PopGlobalExtended"]:
                 v = word() if "Extended" in op else (c & 0xF)
                 _comment += str(literal(v))
+                use_global(literal(v))
                 _var = VariableRef(literal(v).decode())
             elif op in ["PopVariable", "PopVariableExtended"]:
                 v = variable(word() if "Extended" in op else (c & 0xF))
@@ -661,6 +677,8 @@ def run_decompiler(f, add_comments=False, force=False, analyzer=None, debug=Fals
         return block_stack[0]
 
     handlers = []
+    properties = []
+    globals_used = []
     for cur_function_offset in range(2, len(root)):
         try:
             ret = decompile(cur_function_offset, add_comments=add_comments)
@@ -670,8 +688,14 @@ def run_decompiler(f, add_comments=False, force=False, analyzer=None, debug=Fals
             print("-- Failed to decompile")
             if not force:
                 raise e
+    names = root[1] if isinstance(root[1], list) else []
+    globals_used = [g for g in globals_used if g not in names]
+    if globals_used:
+        properties.insert(
+            0, VariableDeclaration(names=[g.decode() for g in globals_used], is_global=True)
+        )
     print("-----")
-    print(Script(handlers=handlers).to_source(analyzer=analyzer))
+    print(Script(properties=properties, handlers=handlers).to_source(analyzer=analyzer))
 
 
 def cli():
