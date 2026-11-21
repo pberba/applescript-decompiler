@@ -7,6 +7,7 @@ def load_untypedPointerBlock(table, id, size):
     refs = TInferiorRefList(size, 0)
     refs.set_table(table)
     refs.readRefs()
-    vector = refs.doLoad()
+    vector = [None] * size
     table.registerObject(id, vector)
+    refs.doLoad(vector)
     table.loader.stack.push(vector)
