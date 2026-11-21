@@ -704,7 +704,8 @@ def convert_literal(lit, target=None):
     elif isinstance(lit, rto.Fixnum):
         return NumberLiteral(value=lit.value)
     elif isinstance(lit, bytes):
-        return StringLiteral(value=lit.decode())
+        # bytes are identifiers (record labels, property names), not strings
+        return VariableRef(name=lit.decode())
     elif isinstance(lit, rto.String):
         return StringLiteral(value=lit.value.decode("utf-16-be"))
     elif isinstance(lit, db.Descriptor):
