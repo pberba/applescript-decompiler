@@ -523,8 +523,9 @@ def run_decompiler(f, add_comments=False, force=False, analyzer=None, debug=Fals
             elif op == "Error":
                 args_count = _stack.pop()
                 if not isinstance(args_count, NumberLiteral):
-                    args_count = _stack.pop().value
+                    # top of stack is the message, the count is below it
                     _s = args_count
+                    args_count = _stack.pop().value
                 else:
                     _s = None
                     args_count = args_count.value
