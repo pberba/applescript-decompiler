@@ -7,6 +7,10 @@ from jinmo_applescript_disassembler.engine.fasparser import Loader
 
 from applescript_decompiler.ast import *
 from applescript_decompiler.utils import load_object
+import jinmo_applescript_disassembler.engine.runtimeobjects as rto
+
+# Labels of the variables in `on error msg number n from f partial result p to t`
+ERROR_LABELS = {"errn": "number", "erob": "from", "ptlr": "partial result", "errt": "to"}
 
 # Some hardcoded offset in apple script binary
 # root -> (<function index> -> (name, ..., literal, code))
@@ -539,7 +543,23 @@ def run_decompiler(f, add_comments=False, force=False, analyzer=None, debug=Fals
 
                 block_stack[curr_index].end_try_pos = v
             elif op == "HandleError":
-                _comment += " " + variable(word()) + " " + variable(word())
+                # Operands are literal indices: the message variable name, and
+                # a Binding chain of labeled variables (number, from, ...).
+                _msg = literal(word())
+                _labeled = literal(word())
+                _vars = []
+                if isinstance(_msg, bytes):
+                    _vars.append(_msg.decode())
+                while isinstance(_labeled, rto.Binding) and isinstance(_labeled.b, bytes):
+                    _label = number_to_code(_labeled.a.value.value)
+                    _vars.append(ERROR_LABELS.get(_label, _label) + " " + _labeled.b.decode())
+                    _labeled = _labeled.next
+                curr_index = len(block_stack) - 1
+                while curr_index > 0 and not isinstance(block_stack[curr_index], TryStatement):
+                    curr_index -= 1
+                if _vars and isinstance(block_stack[curr_index], TryStatement):
+                    block_stack[curr_index].on_error_var = " ".join(_vars)
+                _comment += " " + " ".join(_vars)
             elif op == "PushParentVariable":
                 v = parent_variable(word(), word())
                 _comment += " " + v + " "
