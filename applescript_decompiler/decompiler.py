@@ -90,6 +90,14 @@ def decompile_script(
 
         if len(function) < 7:
             print("-- <maybe binding?>", function)
+            # A property whose value is a string, list, ...
+            if function_offset - 2 < len(names) and isinstance(names[function_offset - 2], bytes):
+                properties.append(
+                    PropertyDecl(
+                        name=names[function_offset - 2].decode(),
+                        initial_value=convert_literal(function),
+                    )
+                )
             return
 
         literals = function[LITERAL_OFFSET + 1]

@@ -1,4 +1,3 @@
--- test: xfail string properties, `global` declarations and `my` are lost
 property a : 1
 property b : "x"
 global g1, g2

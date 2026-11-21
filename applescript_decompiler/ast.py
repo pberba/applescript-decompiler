@@ -381,7 +381,9 @@ class AppleScriptPrinter:
             return f"{left} {right}"
         elif node.op is BinaryOpKind.GET_PROPERTY:
             # alternatively f"{left}'s {right}"
-            if right == "__it__" or right == "my":
+            if right == "my":
+                return f"my {left}"  # `a` alone would compile differently
+            if right == "__it__":
                 return left
             return f"({left} of {right})"
         elif node.op is BinaryOpKind.WHOSE:
@@ -832,6 +834,9 @@ def convert_literal(lit, target=None):
             elements.append(convert_literal(lit.first))
             lit = lit.second
         return ListLiteral(elements=elements)
+    if isinstance(lit, list) and len(lit) == 3 and lit[0] == 4 and isinstance(lit[2], list):
+        # list value: [4, count, [?, item, item, ...]]
+        return ListLiteral(elements=[convert_literal(e) for e in lit[2][1:]])
     if isinstance(lit, list):
         lit = lit[1]
     if isinstance(lit, rto.Object):
