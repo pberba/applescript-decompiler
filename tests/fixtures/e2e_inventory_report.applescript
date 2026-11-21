@@ -1,4 +1,3 @@
--- test: xfail stored references (`a reference to current application's NSString`) lose their value
 -- Inventory report: parse CSV-ish text with Foundation, aggregate per
 -- category with NSMutableDictionary, sort with NSSortDescriptor, and
 -- format a report through script-object helpers.

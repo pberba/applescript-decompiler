@@ -913,6 +913,20 @@ def decompile_script(
                             _block.end_try_pos is not None
                             and _curr_pos >= _block.end_try_pos
                         ):
+                            if (
+                                _curr_pos == _block.end_try_pos
+                                and _stack
+                                and _stack[-1] is not _closed_value
+                            ):
+                                # the on-error part's last statement (no StoreResult)
+                                _closed_value = _stack.pop()
+                                if _var is not None:
+                                    _block.on_error_block.append(
+                                        SetStatement(target=LValue(obj=_var), value=_closed_value)
+                                    )
+                                    _var = None
+                                else:
+                                    _block.on_error_block.append(ExprStatement(expr=_closed_value))
                             _statements.append(block_stack.pop())
                             continue
                     elif isinstance(_block, RepeatStatement):
