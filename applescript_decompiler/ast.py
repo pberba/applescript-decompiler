@@ -129,7 +129,9 @@ class AppleScriptPrinter:
         target_src = ""
         if node.target is not None:
             target_src = self.visit(node.target, 0)
-            if target_src != "my":
+            if target_src == "me":
+                target_src = "my"
+            else:
                 target_src = target_src + "'s"
             target_src = target_src + " "
         if node.labeled:
@@ -343,6 +345,8 @@ class AppleScriptPrinter:
         return f'application "{node.name}"'
 
     def visit_VariableRef(self, node: VariableRef, indent: int = 0) -> str:
+        if node.name == "my":
+            return "me"  # PushMe; possessive uses print `my` themselves
         if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", node.name):
             return "|" + node.name + "|"  # e.g. |weird name|
         return node.name
@@ -387,14 +391,16 @@ class AppleScriptPrinter:
             return f"{left} thru {right}"
         elif node.op is BinaryOpKind.GET_INDEXED:
             # alternatively f"{left}'s {right}"
-            if right == "__it__" or right == "my":
+            if right == "__it__" or right == "me":
                 return left
             return f"{left} {right}"
         elif node.op is BinaryOpKind.GET_PROPERTY:
             # alternatively f"{left}'s {right}"
-            if right == "my":
+            if right == "me":
                 return f"my {left}"  # `a` alone would compile differently
             if right == "__it__":
+                if type(node.left) is VariableRef:
+                    return f"its {left}"  # a user property of `it`
                 return left
             return f"({left} of {right})"
         elif node.op is BinaryOpKind.WHOSE:

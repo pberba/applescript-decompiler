@@ -1,4 +1,3 @@
--- test: xfail `tell me`, `its` and commands in tell blocks
 set x to {1}
 tell x
 	set y to count
