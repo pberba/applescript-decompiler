@@ -380,6 +380,10 @@ class AppleScriptPrinter:
             return f"({left} as {right})"
         elif node.op is BinaryOpKind.THRU:
             # alternatively f"{left}'s {right}"
+            if _is_operator(node.left):
+                left = f"({left})"
+            if _is_operator(node.right):
+                right = f"({right})"
             return f"{left} thru {right}"
         elif node.op is BinaryOpKind.GET_INDEXED:
             # alternatively f"{left}'s {right}"
