@@ -744,14 +744,15 @@ def decompile_script(
                 _comment += " " + v + " "
                 _var = VariableRef(v)
             elif op == "Error":
-                args_count = _stack.pop()
-                if not isinstance(args_count, NumberLiteral):
-                    # top of stack is the message, the count is below it
-                    _s = args_count
-                    args_count = _stack.pop().value
-                else:
+                # Stack: target, label/value pairs, count, message. A bare
+                # `error` pushes PushUndefined as the message, which pushes
+                # nothing here; otherwise the message is on top (it may be a
+                # number itself, e.g. `error 5`).
+                if _prev_op == "PushUndefined":
                     _s = None
-                    args_count = args_count.value
+                else:
+                    _s = _stack.pop()
+                args_count = _stack.pop().value
 
                 if args_count == 0:
                     args = []

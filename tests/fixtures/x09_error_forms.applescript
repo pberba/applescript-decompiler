@@ -1,4 +1,3 @@
--- test: xfail crash on `error` with no message / try without on error
 try
 error 5
 end try
