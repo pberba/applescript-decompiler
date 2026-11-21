@@ -390,6 +390,12 @@ class AppleScriptPrinter:
             if left == "__it__":
                 return f" every {right}"
             return f"(every {right} of {left})"
+        # Parenthesise operands that are themselves operators, otherwise
+        # precedence changes the meaning (`(a + b) * c`).
+        if _is_operator(node.left):
+            left = f"({left})"
+        if _is_operator(node.right):
+            right = f"({right})"
         return f"{left} {op} {right}"
 
     def _binop_to_src(self, op: BinaryOpKind) -> str:
@@ -464,6 +470,19 @@ class AppleScriptPrinter:
             # `error` is a statement, not an expression: no parentheses
             return f"{self._i(indent)}{target_prefix}{_command_name} {args_str}"
         return f"{self._i(indent)}({target_prefix}{_command_name} {args_str})"
+
+
+def _is_operator(node) -> bool:
+    if isinstance(node, UnaryOp):
+        return node.op in (UnaryOpKind.NEG, UnaryOpKind.NOT)
+    return isinstance(node, BinaryOp) and node.op not in (
+        BinaryOpKind.COERCE,  # already parenthesised
+        BinaryOpKind.GET_PROPERTY,
+        BinaryOpKind.GET_INDEXED,
+        BinaryOpKind.EVERY,
+        BinaryOpKind.THRU,
+        BinaryOpKind.WHOSE,
+    )
 
 
 @dataclass
