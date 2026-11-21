@@ -76,3 +76,5 @@ uv run --with pytest pytest
 
 Fixtures can start with `-- test: no-run` (don't execute it) or
 `-- test: xfail <reason>` (known decompiler gap; remove the marker once fixed).
+Format new fixtures with AppleScript's own formatter:
+`osacompile -o /tmp/f.scpt f.applescript && osadecompile /tmp/f.scpt > f.applescript`.

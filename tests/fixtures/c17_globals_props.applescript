@@ -5,3 +5,4 @@ on useBoth()
 	return P * G
 end useBoth
 return useBoth()
+

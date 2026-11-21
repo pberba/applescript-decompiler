@@ -3,3 +3,4 @@ try
 on error errMsg number errNum
 	return errMsg & ":" & errNum
 end try
+

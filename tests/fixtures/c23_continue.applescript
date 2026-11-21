@@ -10,3 +10,4 @@ script Child
 	end describe
 end script
 return Child's describe()
+

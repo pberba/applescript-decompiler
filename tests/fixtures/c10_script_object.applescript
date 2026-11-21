@@ -7,3 +7,4 @@ script Counter
 end script
 tell Counter to increment()
 return Counter's increment()
+

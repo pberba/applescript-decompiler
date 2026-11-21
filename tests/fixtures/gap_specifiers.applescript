@@ -13,3 +13,4 @@ set j to (count L)
 set k to length of L
 set n to item 1 of L
 return {m, b, d}
+

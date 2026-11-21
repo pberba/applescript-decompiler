@@ -6,3 +6,4 @@ ignoring white space
 	set end of r to ("a b" = "ab")
 end ignoring
 return r
+

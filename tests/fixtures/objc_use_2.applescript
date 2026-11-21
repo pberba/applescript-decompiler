@@ -4,3 +4,4 @@ use framework "Foundation"
 use framework "AppKit"
 use fin : application "Finder"
 return 1
+

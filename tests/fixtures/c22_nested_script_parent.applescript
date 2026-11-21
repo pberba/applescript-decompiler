@@ -8,3 +8,4 @@ on makeAdder(k)
 end makeAdder
 set a to makeAdder(10)
 return a's addTo(5)
+

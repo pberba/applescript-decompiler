@@ -7,3 +7,4 @@ else
 	set y to "small"
 end if
 return y
+

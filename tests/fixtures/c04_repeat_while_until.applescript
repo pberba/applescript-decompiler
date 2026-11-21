@@ -7,3 +7,4 @@ repeat until b ≤ 7
 	set b to b - 1
 end repeat
 return {a, b}
+
