@@ -26,8 +26,18 @@ CODE_OFFSET = 6
 
 
 def run_decompiler(f, add_comments=False, force=False, analyzer=None, debug=False):
-    root = f[ROOT_OFFSET]
-    scopes = [root[1] if isinstance(root[1], list) else []]
+    script = decompile_script(f[ROOT_OFFSET], [], add_comments, force, debug)
+    print("-----")
+    print(script.to_source(analyzer=analyzer))
+
+
+def decompile_script(root, outer_scopes, add_comments=False, force=False, debug=False):
+    """Decompile a script body: [outer scope, names, value 0, value 1, ...].
+
+    `outer_scopes` are the name lists of the enclosing scripts, used to
+    resolve PushParentVariable.
+    """
+    scopes = [root[1] if isinstance(root[1], list) else []] + outer_scopes
 
     # assert code['kind'] == 'untypedPointerBlock'  # I think it doesn't matter
     def decompile(function_offset, add_comments=False):  # function number
@@ -49,17 +59,18 @@ def run_decompiler(f, add_comments=False, force=False, analyzer=None, debug=Fals
                 )
             return
 
-        # In one sample, when it kinda looks like a script block?
-        if function[0] == 15:
-            if force:
-                print(
-                    f"-- {function[NAME_OFFSET + 1]} looks like a script block (?). Recursing."
-                )
-                return run_decompiler(function, add_comments, force)
-            else:
-                print(
-                    f"-- {function[NAME_OFFSET + 1]} looks interesting. Try `--force`"
-                )
+        # A script object: [15, name, ?, parent script, script body]
+        if function[0] == 15 and len(function) > 4 and isinstance(function[4], list):
+            print(f"-- {function[NAME_OFFSET + 1]} is a script object")
+            parent = function[3]
+            parent_name = None
+            if isinstance(parent, list) and len(parent) > 1 and isinstance(parent[1], bytes):
+                parent_name = parent[1].decode()  # `property parent : Base`
+            return ScriptBlock(
+                name=function[NAME_OFFSET + 1].decode(),
+                parent=parent_name,
+                script=decompile_script(function[4], scopes, add_comments, force, debug),
+            )
 
         if len(function) < 7:
             print("-- <maybe binding?>", function)
@@ -780,8 +791,7 @@ def run_decompiler(f, add_comments=False, force=False, analyzer=None, debug=Fals
         properties.insert(
             0, VariableDeclaration(names=[g.decode() for g in globals_used], is_global=True)
         )
-    print("-----")
-    print(Script(properties=properties, handlers=handlers).to_source(analyzer=analyzer))
+    return Script(properties=properties, handlers=handlers)
 
 
 def cli():
@@ -823,7 +833,7 @@ def parse_args():
         "-f",
         "--force",
         action="store_true",
-        help="Recursively traverse to find handlers to force handlers to come out and ignore errors",
+        help="Ignore errors and keep decompiling the remaining handlers",
     )
     parser.add_argument(
         "-d",

@@ -239,6 +239,16 @@ class AppleScriptPrinter:
             [f"{self._i(indent)}{header}"] + body_lines + [f"{self._i(indent)}{footer}"]
         )
 
+    def visit_ScriptBlock(self, node: ScriptBlock, indent: int = 0) -> str:
+        lines = [f"{self._i(indent)}script {node.name}"]
+        if node.parent:
+            lines.append(f"{self._i(indent + 1)}property parent : {node.parent}")
+        body = self.visit(node.script, indent + 1)
+        if body:
+            lines.append(body)
+        lines.append(f"{self._i(indent)}end script")
+        return "\n".join(lines)
+
     def visit_TellBlock(self, node: TellBlock, indent: int = 0) -> str:
         target_src = self.visit(node.target, 0)
 
@@ -569,6 +579,14 @@ class TellBlock(Statement):
     target: Expression
     body: List[Statement]
     is_done: Optional[bool] = False
+
+
+@dataclass
+class ScriptBlock(Statement):
+    # `script Name` ... `end script`
+    name: str
+    script: Script
+    parent: Optional[str] = None  # `property parent : Base`
 
 
 @dataclass

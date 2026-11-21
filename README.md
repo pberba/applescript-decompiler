@@ -35,7 +35,7 @@ positional arguments:
 options:
   -h, --help           show this help message and exit
   -c, --comments       Include comments in the decompiled output
-  -f, --force          Recursively traverse to find handlers to force handlers to come out and ignore errors
+  -f, --force          Ignore errors and keep decompiling the remaining handlers
   -d, --debug          Prints out the disassembled code while decompiling
   --analyzer ANALYZER  Dotted path to analyzer class like applescript_decompiler.OSAMinerDecryptAnalyzer, applescript_decompiler.NaiveStringAnalyzer, or local.MyAnalyzer (for a file in local.py)
 
