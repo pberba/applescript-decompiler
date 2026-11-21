@@ -435,8 +435,10 @@ class AppleScriptPrinter:
                 if type(node.left) is VariableRef:
                     return f"its {left}"  # a user property of `it`
                 return left
-            if isinstance(node.right, BinaryOp) and node.right.op is BinaryOpKind.WHOSE:
-                right = f"({right})"  # item 1 of (every disk whose ...)
+            if (isinstance(node.right, BinaryOp) and node.right.op is BinaryOpKind.WHOSE) or _is_operator(
+                node.right
+            ):
+                right = f"({right})"  # item 1 of (every disk whose ...), text of (a & b)
             return f"({left} of {right})"
         elif node.op is BinaryOpKind.WHOSE:
             return f"{left} whose {right}"
