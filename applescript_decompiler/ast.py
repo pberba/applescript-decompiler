@@ -76,7 +76,9 @@ class AppleScriptPrinter:
 
     def visit_Handler(self, node: Handler, indent: int = 0) -> str:
         params = ""
-        if node.parameters:
+        if node.parameters or not isinstance(node.name, rto.Object):
+            # user handlers need `()` even without parameters;
+            # event handlers (`on run`) don't
             params = "(" + ", ".join(node.parameters) + ")"
 
         _node_name = node.name
