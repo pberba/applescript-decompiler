@@ -43,6 +43,14 @@ STANDARD_ADDITIONS = "StandardAdditions"
 AS_TERMS = {n for n in EVENT_CODES[DEFAULT_TARGET].values() if n.isidentifier()}
 
 
+def identifier(name):
+    """`name` as a user identifier: barred if it isn't a plain one or is a
+    term, e.g. |weird name|, or |name| (not the keyword)."""
+    if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", name) or name in AS_TERMS:
+        return "|" + name + "|"
+    return name
+
+
 class AppleScriptPrinter:
     target = DEFAULT_TARGET
     command = "None"
@@ -103,7 +111,7 @@ class AppleScriptPrinter:
         if node.parameters or not isinstance(node.name, rto.Object):
             # user handlers need `()` even without parameters;
             # event handlers (`on run`) don't
-            params = "(" + ", ".join(node.parameters) + ")"
+            params = "(" + ", ".join(identifier(p) for p in node.parameters) + ")"
 
         _node_name = node.name
 
@@ -116,10 +124,12 @@ class AppleScriptPrinter:
                 _node_name = val.identifier[0].to_bytes(4, "big").decode(
                     "ascii"
                 ) + val.identifier[1].to_bytes(4, "big").decode("ascii")
+        else:
+            _node_name = identifier(_node_name)
 
         if node.labeled:
             params = " given " + ", ".join(
-                f"{self.visit(label, 0)}:{var}" for label, var in node.labeled
+                f"{self.visit(label, 0)}:{identifier(var)}" for label, var in node.labeled
             )
 
         header = f"{self._i(indent)}on {_node_name}{params}"
@@ -149,7 +159,9 @@ class AppleScriptPrinter:
             given = ", ".join(
                 f"{self.visit(label, 0)}:{self.visit(value, 0)}" for label, value in node.labeled
             )
-            return f"{self._i(indent)}{target_src}{node.handler_name} given {given}"
+            # parenthesised: as an argument (`log (f given x:1)`), `given`
+            # would otherwise bind to the enclosing command
+            return f"{self._i(indent)}({target_src}{node.handler_name} given {given})"
         _name = node.handler_name
         if _name in AS_TERMS:
             _name = f"|{_name}|"
@@ -388,9 +400,7 @@ class AppleScriptPrinter:
     def visit_VariableRef(self, node: VariableRef, indent: int = 0) -> str:
         if node.name == "my":
             return "me"  # PushMe; possessive uses print `my` themselves
-        if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", node.name) or node.name in AS_TERMS:
-            return "|" + node.name + "|"  # e.g. |weird name|, or |name| (not the keyword)
-        return node.name
+        return identifier(node.name)
 
     def visit_ElementSpecifier(self, node: ElementSpecifier, indent: int = 0) -> str:
         container = self.visit(node.container, 0)
