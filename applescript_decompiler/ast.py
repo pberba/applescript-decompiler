@@ -369,6 +369,8 @@ class AppleScriptPrinter:
             if right == "__it__" or right == "my":
                 return left
             return f"({left} of {right})"
+        elif node.op is BinaryOpKind.WHOSE:
+            return f"{left} whose {right}"
         elif node.op is BinaryOpKind.EVERY:
             if left == "__it__":
                 return f" every {right}"
@@ -679,6 +681,7 @@ class BinaryOpKind(Enum):
 
     COERCE = auto()  # x as type
     CONTAINS = auto()
+    WHOSE = auto()  # X whose Y
     QUOTIENT = auto()  # div
     STARTS_WITH = auto()
     ENDS_WITH = auto()
@@ -768,6 +771,9 @@ def number_to_code(num):
 
 
 def convert_literal(lit, target=None):
+    if isinstance(lit, list) and lit == [19]:
+        # the object being tested in a `whose` clause; behaves like `it`
+        return VariableRef(name="__it__")
     if isinstance(lit, rto.Pair):  # list constant, e.g. considering attributes
         elements = []
         while isinstance(lit, rto.Pair) and not isinstance(lit, rto.EmptyPair):

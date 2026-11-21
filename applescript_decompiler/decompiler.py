@@ -279,6 +279,11 @@ def decompile_script(
                     pass
                 else:
                     _stack.append(_stack[-1])
+            elif op == "GCSwap" and len(_stack) >= 2:
+                _stack[-1], _stack[-2] = _stack[-2], _stack[-1]
+            elif op == "Pop" and _stack and _prev_op != "PushUndefined":
+                # (PushUndefined pushes nothing here, so its Pop is skipped)
+                _stack.pop()
             elif op in BINARY_OP_MAPPING:
                 r = _stack.pop()
                 l = _stack.pop()
@@ -391,12 +396,12 @@ def decompile_script(
                     )
                 elif "GetRange" in sub_operation:
                     _comment += str(_stack)
+                    # stack: container, class, from, to (GCSwap/Pop already
+                    # removed the container copies used to evaluate from/to)
                     _to = _stack.pop()
                     _from = _stack.pop()
                     _prop = _stack.pop()
-                    _stack.pop()
                     _var = _stack.pop()
-                    _stack.pop()
                     _range = BinaryOp(op=BinaryOpKind.THRU, left=_from, right=_to)
                     # `item 2 thru 4 of L`
                     _stack.append(
@@ -406,6 +411,24 @@ def decompile_script(
                             right=_var,
                         )
                     )
+                elif t == 26:
+                    # `<container> whose <test>`
+                    _test = _stack.pop()
+                    _container = _stack.pop()
+                    _stack.append(BinaryOp(op=BinaryOpKind.WHOSE, left=_container, right=_test))
+                elif t == 44:
+                    # whose-clause `not`
+                    _stack.append(UnaryOp(op=UnaryOpKind.NOT, operand=_stack.pop()))
+                elif op == "MakeComp" and opcodes[t - 33] in BINARY_OP_MAPPING:
+                    # whose-clause comparison: sub-operation = 33 + comparison opcode
+                    r = _stack.pop()
+                    l = _stack.pop()
+                    _stack.append(BinaryOp(op=BINARY_OP_MAPPING[opcodes[t - 33]], left=l, right=r))
+                elif op == "MakeComp" and opcodes[t - 33] in ("And", "Or"):
+                    r = _stack.pop()
+                    l = _stack.pop()
+                    _kind = BinaryOpKind.AND if opcodes[t - 33] == "And" else BinaryOpKind.OR
+                    _stack.append(BinaryOp(op=_kind, left=l, right=r))
                 else:
                     print(f"-- Warning {op}:{sub_operation} is not implemented")
                     _comment += " (not implemented)"
