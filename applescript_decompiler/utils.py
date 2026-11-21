@@ -99,7 +99,9 @@ def get_event_code_mapping():
             name = e.strip("'")
         if idx % 4 == 3:
             e = e.split(":")[0].strip()
-            event_code[e][code] = name
+            # Keep the first definition: later entries with the same code are
+            # usually plurals ("items", "booleans") or synonyms ("plain text").
+            event_code[e].setdefault(code, name)
     # Rename for consistency with sdef
     event_code["StandardAdditions"] = event_code["Standard Additions"]
     return event_code
