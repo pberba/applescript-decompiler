@@ -508,8 +508,12 @@ class AppleScriptPrinter:
         prev_command = self.command
         prev_target = self.target
 
+        # an application name (e.g. "System Events"), used as is
+        _target_name = (
+            node.target.name if type(node.target) is VariableRef else self.visit(node.target, 0)
+        )
         if node.target is not None:
-            self.target = self.visit(node.target, 0)
+            self.target = _target_name
 
         _command_name = node.command_name
         if node.command_name in SDEFS[self.target]:
@@ -528,7 +532,7 @@ class AppleScriptPrinter:
         args_str = " ".join([e if isinstance(e, str) else e.decode() for e in args_src])
         target_prefix = ""
         if node.target is not None:
-            target_prefix = f"tell application \"{self.visit(node.target, 0)}\" "
+            target_prefix = f"tell application \"{_target_name}\" "
 
         self.command = prev_command
         self.target = prev_target
