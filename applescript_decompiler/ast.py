@@ -330,10 +330,11 @@ class AppleScriptPrinter:
         if node.value == "lnfd":  # missing from the terminology table
             return "linefeed"
 
-        if self.command != "None" and node.value in SDEFS[self.target][self.command]:
-            params = SDEFS[self.target][node.command_name]["name"]
+        if self.command != "None":
+            # a parameter label of the command being printed (`make new ... at`)
+            params = SDEFS[self.target].get(self.command, {}).get("parameters", {})
             if node.value in params:
-                return params[node.value]["name"]
+                return params[node.value]
 
         if node.value in SDEFS[STANDARD_ADDITIONS]:
             return f"{SDEFS[STANDARD_ADDITIONS][node.value]['name']}"
