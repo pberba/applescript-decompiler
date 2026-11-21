@@ -1,4 +1,3 @@
--- test: xfail negative numbers, copy, `a reference to`, record properties
 property L : {1, 2.5, -3, "x", {a:1}}
 property R : {p:true}
 property D : missing value

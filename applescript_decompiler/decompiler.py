@@ -330,6 +330,10 @@ def decompile_script(
                         ignoring=_ignoring.elements,
                     )
                 )
+            elif op == "Clone":
+                _stack.append(Copied(value=_stack.pop()))
+            elif op == "ObjectAliasQuote":
+                _stack.append(UnaryOp(op=UnaryOpKind.REFERENCE_TO, operand=_stack.pop()))
             elif op == "BeginTimeout":
                 block_stack.append(TimeoutBlock(target=None, body=[], timeout=_stack.pop()))
             elif op == "PushEmpty":

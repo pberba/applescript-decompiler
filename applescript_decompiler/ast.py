@@ -140,6 +140,8 @@ class AppleScriptPrinter:
 
     def visit_SetStatement(self, node: SetStatement, indent: int = 0) -> str:
         target_src = self.visit(node.target, 0)
+        if isinstance(node.value, Copied):
+            return f"{self._i(indent)}copy {self.visit(node.value.value, 0)} to {target_src}"
         value_src = self.visit(node.value, 0)
         return f"{self._i(indent)}set {target_src} to {value_src}"
 
@@ -300,6 +302,8 @@ class AppleScriptPrinter:
         # naive quoting; you may want to escape quotes
         if node.value in CONSIDERATIONS:
             return CONSIDERATIONS[node.value]
+        if node.value == "lnfd":  # missing from the terminology table
+            return "linefeed"
 
         if self.command != "None" and node.value in SDEFS[self.target][self.command]:
             params = SDEFS[self.target][node.command_name]["name"]
@@ -437,7 +441,12 @@ class AppleScriptPrinter:
             return f"beginning of ({operand})"
         elif node.op is UnaryOpKind.END_OF:
             return f"end of ({operand})"
+        elif node.op is UnaryOpKind.REFERENCE_TO:
+            return f"a reference to ({operand})"
         return operand
+
+    def visit_Copied(self, node: Copied, indent: int = 0) -> str:
+        return self.visit(node.value, 0)
 
     def visit_CommandCall(self, node: CommandCall, indent: int = 0) -> str:
         prev_command = self.command
@@ -800,9 +809,16 @@ class UnaryOpKind(Enum):
     NOT = auto()  # not x
     END_OF = auto()
     BEGINNING_OF = auto()
+    REFERENCE_TO = auto()  # a reference to X
 
 
 UNARY_OP_MAPPING = {"Negate": UnaryOpKind.NEG, "Not": UnaryOpKind.NOT}
+
+
+@dataclass
+class Copied(Expression):
+    # value produced by Clone: `copy x to y` instead of `set y to x`
+    value: Expression
 
 
 @dataclass
@@ -837,14 +853,27 @@ def convert_literal(lit, target=None):
     if isinstance(lit, list) and len(lit) == 3 and lit[0] == 4 and isinstance(lit[2], list):
         # list value: [4, count, [?, item, item, ...]]
         return ListLiteral(elements=[convert_literal(e) for e in lit[2][1:]])
+    if isinstance(lit, rto.Binding):  # record value: chain of label/value bindings
+        fields = []
+        while isinstance(lit, rto.Binding):
+            fields.append(RecordField(label=convert_literal(lit.a), value=convert_literal(lit.b)))
+            lit = lit.next
+        return RecordLiteral(fields=fields)
+    if isinstance(lit, float):
+        return NumberLiteral(value=lit)
     if isinstance(lit, list):
         lit = lit[1]
     if isinstance(lit, rto.Object):
         lit = lit.value
     if isinstance(lit, rto.Constant):
-        return Keyword(value=number_to_code(lit.value))
+        code = number_to_code(lit.value)
+        if code in ("boovtrue", "boovfals"):  # booleans stored as constants
+            return BooleanLiteral(value=code == "boovtrue")
+        return Keyword(value=code)
     elif isinstance(lit, rto.Fixnum):
-        return NumberLiteral(value=lit.value)
+        # small integers are stored as 16 bits: 0xfffd is -3
+        v = lit.value
+        return NumberLiteral(value=v - 0x10000 if 0x8000 <= v <= 0xFFFF else v)
     elif isinstance(lit, bytes):
         # bytes are identifiers (record labels, property names), not strings
         return VariableRef(name=lit.decode())
