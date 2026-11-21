@@ -414,14 +414,14 @@ def decompile_script(
                     _to = _stack.pop()
                     _from = _stack.pop()
                     _prop = _stack.pop()
-                    _var = _stack.pop()
+                    _range_of = _stack.pop()
                     _range = BinaryOp(op=BinaryOpKind.THRU, left=_from, right=_to)
                     # `item 2 thru 4 of L`
                     _stack.append(
                         BinaryOp(
                             op=BinaryOpKind.GET_PROPERTY,
                             left=BinaryOp(op=BinaryOpKind.GET_INDEXED, left=_prop, right=_range),
-                            right=_var,
+                            right=_range_of,
                         )
                     )
                 elif t == 26:
