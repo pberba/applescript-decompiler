@@ -1,4 +1,3 @@
--- test: xfail properties of a script defined inside a handler are lost
 on mk(k)
 	script T
 		property c : k

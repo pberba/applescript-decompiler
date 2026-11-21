@@ -31,6 +31,28 @@ def run_decompiler(f, add_comments=False, force=False, analyzer=None, debug=Fals
     print(script.to_source(analyzer=analyzer))
 
 
+def script_from_init(statements, init_locals):
+    """Rebuild a script object from the statements of its `init` closure."""
+    names = {n.decode() for n in init_locals if isinstance(n, bytes)}
+    script = Script(properties=[], handlers=[], body=[])
+    for stmt in statements:
+        if isinstance(stmt, PropertyDecl):
+            script.properties.append(stmt)
+        elif (
+            isinstance(stmt, SetStatement)
+            and isinstance(stmt.target.obj, VariableRef)
+            and stmt.target.obj.name in names
+        ):
+            script.properties.append(PropertyDecl(name=stmt.target.obj.name, initial_value=stmt.value))
+        elif isinstance(stmt, Handler) and isinstance(stmt.name, rto.Object):
+            script.body.extend(stmt.body)  # the script's run handler
+        elif isinstance(stmt, Handler):
+            script.handlers.append(stmt)
+        elif not isinstance(stmt, VariableDeclaration):
+            script.body.append(stmt)
+    return script
+
+
 def decompile_script(
     root, outer_scopes, add_comments=False, force=False, debug=False, scope_names=None
 ):
@@ -552,33 +574,44 @@ def decompile_script(
                 _stack.append(_call)
             elif op == "DefineActor":
                 # `script Name ... end script` inside a handler. Stack: name,
-                # syntax tree (unused). The literal is an `init` closure whose
-                # literals include the script's handlers.
+                # syntax tree (unused). The literal is an `init` closure that
+                # builds the script: property initialisations (assignments to
+                # its locals, DefineProperty for `parent`), DefineProcedure for
+                # each handler, the run handler last.
                 v = word()
                 _comment += str(v) + " "
                 _stack.pop()
                 _script_name = _stack.pop()
                 _bound.add(_script_name.name)
                 _closure = literal(v)
-                _closure_locals = _closure[LOCALS_OFFSET + 1]
-                _handlers = [
-                    x
-                    for x in _closure[LITERAL_OFFSET + 1]
-                    if isinstance(x, list) and len(x) > CODE_OFFSET + 1 and x[0] in (16, 17)
-                ]
+                _init = decompile_script(
+                    [None, [b"init"], _closure], scopes, add_comments, force, debug,
+                    scope_names=local_names,
+                ).handlers[0]
                 _stack.append(
                     ScriptBlock(
                         name=_script_name.name,
-                        script=decompile_script(
-                            [None, [h[NAME_OFFSET + 1] for h in _handlers]] + _handlers,
-                            [local_names] + scopes,
-                            add_comments,
-                            force,
-                            debug,
-                            scope_names=_closure_locals,
-                        ),
+                        script=script_from_init(_init.body, _closure[LOCALS_OFFSET + 1]),
                     )
                 )
+            elif op in ("DefineProcedure", "DefineClosure"):
+                # a handler of a script being built by an `init` closure
+                v = word()
+                _comment += str(v) + " "
+                _fn = literal(v)
+                _stack.append(
+                    decompile_script(
+                        [None, [_fn[NAME_OFFSET + 1]], _fn], scopes, add_comments, force, debug,
+                        scope_names=local_names,
+                    ).handlers[0]
+                )
+            elif op == "DefineProperty":
+                # `property parent : X` in an `init` closure; literal = name
+                v = word()
+                _comment += str(v) + " "
+                _prop = literal(v)
+                _prop = _prop.decode() if isinstance(_prop, bytes) else "parent"
+                _stack.append(PropertyDecl(name=_prop, initial_value=_stack.pop()))
             elif op == "EndDefineActor":
                 pass
             elif op == "PositionalMessageSend":
@@ -606,8 +639,9 @@ def decompile_script(
                 )
             elif op == "StoreResult" and _stack:
                 _curr = _stack.pop()
-                if isinstance(_curr, ScriptBlock):
-                    # `script Adder ... end script` inside a handler
+                if isinstance(_curr, (ScriptBlock, Handler, PropertyDecl)):
+                    # `script Adder ... end script` inside a handler, or a
+                    # handler/property of a script being built
                     _statements.append(_curr)
                     _var = None
                 elif _var is not None:
@@ -679,7 +713,11 @@ def decompile_script(
                 elif _stack and state["pos"] >= len(code):
                     # The handler's final, implicit Return: the value is the
                     # result of the last statement, not an explicit `return`.
-                    _statements.append(ExprStatement(expr=_stack.pop()))
+                    _curr = _stack.pop()
+                    if isinstance(_curr, (ScriptBlock, Handler, PropertyDecl)):
+                        _statements.append(_curr)
+                    else:
+                        _statements.append(ExprStatement(expr=_curr))
                 elif _stack:
                     _statements.append(ReturnStatement(value=_stack.pop()))
                 elif op != _prev_op and state["pos"] < len(code):
