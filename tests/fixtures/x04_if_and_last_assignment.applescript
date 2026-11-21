@@ -1,4 +1,3 @@
--- test: xfail the last statement's assignment is lost
 set x to 3
 if x = 3 then
 if x > 1 then set x to 2

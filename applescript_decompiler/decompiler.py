@@ -650,7 +650,12 @@ def decompile_script(
                 # A call left on the stack by the very last Return is the
                 # implicit result of the last statement; anywhere else it is
                 # an explicit `return f()`.
-                if _stack and state["pos"] >= len(code) and (
+                if _stack and _var is not None:
+                    # The handler's last statement is an assignment: the
+                    # implicit Return follows Pop*/SetData with no StoreResult.
+                    _statements.append(SetStatement(target=LValue(obj=_var), value=_stack.pop()))
+                    _var = None
+                elif _stack and state["pos"] >= len(code) and (
                     isinstance(_stack[-1], CommandCall)
                     or isinstance(_stack[-1], HandlerCall)
                 ):
