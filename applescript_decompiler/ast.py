@@ -12,8 +12,7 @@ import jinmo_applescript_disassembler.engine.fasobjects.data_block as db
 from applescript_decompiler.utils import *
 
 EVENT_CODES = get_event_code_mapping()
-SDEFS = load_sdefs_from_package()
-ENUMERATORS = load_enumerators_from_package()
+SDEFS, ENUMERATORS = load_package_sdefs()
 # Standard Additions classes/properties/enumerations (not command
 # parameters, whose codes mean something only for their command)
 STANDARD_ADDITIONS_TERMS = {}

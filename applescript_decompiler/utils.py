@@ -12,10 +12,11 @@ from pathlib import Path
 
 
 def parse_sdef(path):
-    # Note: We should be able to parse more, like classes. TODO?
-    tree = ET.parse(path)
-    root = tree.getroot()
+    return sdef_commands(ET.parse(path).getroot())
 
+
+def sdef_commands(root):
+    # Note: We should be able to parse more, like classes. TODO?
     commands = {}
 
     # Find all <command> elements anywhere in the document
@@ -62,37 +63,33 @@ def load_sdefs_from_folder(folder_path):
 
 
 def load_sdefs_from_package():
+    return load_package_sdefs()[0]
+
+
+def load_package_sdefs():
+    """Parse each bundled sdef once. Returns (app name -> commands,
+    enumerator code -> name), e.g. 'rndS' -> 'as taught in school'; for
+    enumerators the first definition wins."""
     data_dir = resources.files("applescript_decompiler.data")
     result = defaultdict(dict)
+    enumerators = {}
 
-    for entry in data_dir.iterdir():
+    for entry in sorted(data_dir.iterdir(), key=lambda e: e.name):
         if not (entry.is_file() and entry.suffix.lower() == ".sdef"):
             continue
 
         app_name = entry.stem  # "Finder.sdef" -> "Finder"
 
         with entry.open("rb") as f:
-            commands = parse_sdef(f)
+            root = ET.parse(f).getroot()
 
-        result[app_name] = commands
+        result[app_name] = sdef_commands(root)
+        for enumerator in root.iter("enumerator"):
+            code, name = enumerator.get("code"), enumerator.get("name")
+            if code and name:
+                enumerators.setdefault(code, name)
 
-    return result
-
-
-def load_enumerators_from_package():
-    """Enumerator code -> name from every bundled sdef (e.g. 'rndS' ->
-    'as taught in school'); first definition wins."""
-    data_dir = resources.files("applescript_decompiler.data")
-    result = {}
-    for entry in sorted(data_dir.iterdir(), key=lambda e: e.name):
-        if not (entry.is_file() and entry.suffix.lower() == ".sdef"):
-            continue
-        with entry.open("rb") as f:
-            for enumerator in ET.parse(f).getroot().iter("enumerator"):
-                code, name = enumerator.get("code"), enumerator.get("name")
-                if code and name:
-                    result.setdefault(code, name)
-    return result
+    return result, enumerators
 
 
 # Pulled from: https://developer.apple.com/library/archive/releasenotes/AppleScript/ASTerminology_AppleEventCodes/TermsAndCodes.html
