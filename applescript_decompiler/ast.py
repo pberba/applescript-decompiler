@@ -394,6 +394,9 @@ class AppleScriptPrinter:
         self.command = prev_command
         self.target = prev_target
 
+        if node.command_name == "error":
+            # `error` is a statement, not an expression: no parentheses
+            return f"{self._i(indent)}{target_prefix}{_command_name} {args_str}"
         return f"{self._i(indent)}({target_prefix}{_command_name} {args_str})"
 
 
