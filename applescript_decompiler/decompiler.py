@@ -31,13 +31,18 @@ def run_decompiler(f, add_comments=False, force=False, analyzer=None, debug=Fals
     print(script.to_source(analyzer=analyzer))
 
 
-def decompile_script(root, outer_scopes, add_comments=False, force=False, debug=False):
+def decompile_script(
+    root, outer_scopes, add_comments=False, force=False, debug=False, scope_names=None
+):
     """Decompile a script body: [outer scope, names, value 0, value 1, ...].
 
     `outer_scopes` are the name lists of the enclosing scripts, used to
-    resolve PushParentVariable.
+    resolve PushParentVariable. `scope_names` overrides the names handlers
+    see at depth 1 (for scripts defined inside handlers).
     """
-    scopes = [root[1] if isinstance(root[1], list) else []] + outer_scopes
+    if scope_names is None:
+        scope_names = root[1] if isinstance(root[1], list) else []
+    scopes = [scope_names] + outer_scopes
 
     # assert code['kind'] == 'untypedPointerBlock'  # I think it doesn't matter
     def decompile(function_offset, add_comments=False):  # function number
@@ -486,6 +491,36 @@ def decompile_script(root, outer_scopes, add_comments=False, force=False, debug=
                 else:
                     _call = HandlerCall(handler_name=_name, arguments=args)
                 _stack.append(_call)
+            elif op == "DefineActor":
+                # `script Name ... end script` inside a handler. Stack: name,
+                # syntax tree (unused). The literal is an `init` closure whose
+                # literals include the script's handlers.
+                v = word()
+                _comment += str(v) + " "
+                _stack.pop()
+                _script_name = _stack.pop()
+                _closure = literal(v)
+                _closure_locals = _closure[LOCALS_OFFSET + 1]
+                _handlers = [
+                    x
+                    for x in _closure[LITERAL_OFFSET + 1]
+                    if isinstance(x, list) and len(x) > CODE_OFFSET + 1 and x[0] in (16, 17)
+                ]
+                _stack.append(
+                    ScriptBlock(
+                        name=_script_name.name,
+                        script=decompile_script(
+                            [None, [h[NAME_OFFSET + 1] for h in _handlers]] + _handlers,
+                            [local_names] + scopes,
+                            add_comments,
+                            force,
+                            debug,
+                            scope_names=_closure_locals,
+                        ),
+                    )
+                )
+            elif op == "EndDefineActor":
+                pass
             elif op == "PositionalMessageSend":
                 v = word()
                 _comment += str(v) + " # " + str(literal(v))
@@ -511,7 +546,11 @@ def decompile_script(root, outer_scopes, add_comments=False, force=False, debug=
                 )
             elif op == "StoreResult" and _stack:
                 _curr = _stack.pop()
-                if _var is not None:
+                if isinstance(_curr, ScriptBlock):
+                    # `script Adder ... end script` inside a handler
+                    _statements.append(_curr)
+                    _var = None
+                elif _var is not None:
                     _statements.append(
                         SetStatement(
                             # TODO: handle generic values
