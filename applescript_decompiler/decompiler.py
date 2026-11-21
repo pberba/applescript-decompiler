@@ -466,6 +466,26 @@ def decompile_script(root, outer_scopes, add_comments=False, force=False, debug=
                         command_name=event_code, arguments=[_stack.pop()] + args
                     )
                 )
+            elif op in ("Continue", "PositionalContinue"):
+                # `continue name(args)`; stack: me, args, count, next, it
+                # (PushNext pushes nothing here)
+                v = word()
+                _comment += str(v) + " # " + str(literal(v))
+                _stack.pop()  # it
+                args_count = _stack.pop().value
+                args = _stack[len(_stack) - args_count:]
+                _stack = _stack[: len(_stack) - args_count]
+                _stack.pop()  # me
+                _name = "continue " + literal(v).decode()
+                if op == "Continue" and args:
+                    _call = HandlerCall(
+                        handler_name=_name,
+                        arguments=[],
+                        labeled=[(args[i], args[i + 1]) for i in range(0, len(args) - 1, 2)],
+                    )
+                else:
+                    _call = HandlerCall(handler_name=_name, arguments=args)
+                _stack.append(_call)
             elif op == "PositionalMessageSend":
                 v = word()
                 _comment += str(v) + " # " + str(literal(v))
