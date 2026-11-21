@@ -14,6 +14,7 @@ from applescript_decompiler.utils import *
 
 EVENT_CODES = get_event_code_mapping()
 SDEFS = load_sdefs_from_package()
+ENUMERATORS = load_enumerators_from_package()
 
 # considering/ignoring attributes, stored as 'cons' + attribute code
 CONSIDERATIONS = {
@@ -325,6 +326,13 @@ class AppleScriptPrinter:
             and node.value[4:] in EVENT_CODES[DEFAULT_TARGET]
         ):
             return f"{EVENT_CODES[DEFAULT_TARGET][node.value[4:]]}"
+        if node.value in EVENT_CODES[STANDARD_ADDITIONS]:  # e.g. 'ppor' port
+            return EVENT_CODES[STANDARD_ADDITIONS][node.value]
+        # enumerated values: 'rndS', or 'olierndS' (enumeration + enumerator)
+        if node.value in ENUMERATORS:
+            return ENUMERATORS[node.value]
+        if len(node.value) == 8 and node.value[4:] in ENUMERATORS:
+            return ENUMERATORS[node.value[4:]]
         return f"{node.value}"
 
     def visit_NumberLiteral(self, node: NumberLiteral, indent: int = 0) -> str:
