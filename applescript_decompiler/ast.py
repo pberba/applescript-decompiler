@@ -2,7 +2,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import List, Optional, Union, Dict, Any
-import json
 import re
 
 import warnings
@@ -305,8 +304,24 @@ class AppleScriptPrinter:
         return self.visit(node.obj)
 
     def visit_StringLiteral(self, node: StringLiteral, indent: int = 0) -> str:
-        # naive quoting; you may want to escape quotes
-        return json.dumps(node.value)
+        # AppleScript only knows the escapes \" \\ \n \t \r; any other
+        # character (e.g. "…") is written as is. Other control characters
+        # can't appear in a literal, so splice them in with `character id`.
+        escapes = {"\\": "\\\\", '"': '\\"', "\n": "\\n", "\t": "\\t", "\r": "\\r"}
+        parts, current = [], ""
+        for ch in node.value:
+            if ch in escapes:
+                current += escapes[ch]
+            elif ord(ch) < 0x20 or ord(ch) == 0x7F:
+                parts.append(f'"{current}"')
+                parts.append(f"(character id {ord(ch)})")
+                current = ""
+            else:
+                current += ch
+        if not parts:
+            return f'"{current}"'
+        parts.append(f'"{current}"')
+        return "(" + " & ".join(parts) + ")"
 
     def visit_Keyword(self, node: Keyword, indent: int = 0) -> str:
         # naive quoting; you may want to escape quotes
