@@ -86,10 +86,12 @@ def decompile_script(
 
         if type(function) is not list:
             print("-- <not a function>")
-            # A script-level value that isn't a handler is a property
+            # A script-level value that isn't a handler is a property. Kept
+            # in declaration order among the handlers: the order of the
+            # script's members is part of the compiled script.
             names = root[1] if isinstance(root[1], list) else []
             if function_offset - 2 < len(names) and isinstance(names[function_offset - 2], bytes):
-                properties.append(
+                handlers.append(
                     PropertyDecl(
                         name=names[function_offset - 2].decode(),
                         initial_value=convert_literal(function),
@@ -114,7 +116,7 @@ def decompile_script(
             print("-- <maybe binding?>", function)
             # A property whose value is a string, list, ...
             if function_offset - 2 < len(names) and isinstance(names[function_offset - 2], bytes):
-                properties.append(
+                handlers.append(
                     PropertyDecl(
                         name=names[function_offset - 2].decode(),
                         initial_value=convert_literal(function),
