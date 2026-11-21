@@ -1,4 +1,3 @@
--- test: xfail `character id N` (key form) is printed as `kfrmID`
 -- Algorithms: recursive quicksort checked against NSArray sorting,
 -- memoised Fibonacci in a script object, closures built in handlers,
 -- labeled parameters, references/copy semantics and text processing.

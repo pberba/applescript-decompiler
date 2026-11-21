@@ -197,6 +197,7 @@ def decompile_script(
 
         _var = None
         _prev_op = None
+        _closed_value = None  # value that ended the last closed else branch
 
         while state["pos"] < len(code):
             _curr_pos = state["pos"]
@@ -639,7 +640,11 @@ def decompile_script(
                 )
             elif op == "StoreResult" and _stack:
                 _curr = _stack.pop()
-                if isinstance(_curr, (ScriptBlock, Handler, PropertyDecl)):
+                if _curr is _closed_value:
+                    # a Dup'ed copy of the value that ended an else branch,
+                    # already emitted there (the Dup ran before the if closed)
+                    pass
+                elif isinstance(_curr, (ScriptBlock, Handler, PropertyDecl)):
                     # `script Adder ... end script` inside a handler, or a
                     # handler/property of a script being built
                     _statements.append(_curr)
@@ -913,8 +918,20 @@ def decompile_script(
                             if _statements and (_curr_pos <= _block.end_if_pos):
                                 _block.else_block.extend(_statements)
                                 _statements = []
-                            if _curr_pos == _block.end_if_pos and _stack:
-                                _block.else_block.append(_stack.pop())
+                            if (
+                                _curr_pos == _block.end_if_pos
+                                and _stack
+                                and _stack[-1] is not _closed_value  # else-if chain
+                            ):
+                                # the else branch's last statement (no StoreResult)
+                                _closed_value = _stack.pop()
+                                if _var is not None:
+                                    _block.else_block.append(
+                                        SetStatement(target=LValue(obj=_var), value=_closed_value)
+                                    )
+                                    _var = None
+                                else:
+                                    _block.else_block.append(ExprStatement(expr=_closed_value))
                             if _curr_pos == _block.end_if_pos:
                                 _statements.append(block_stack.pop())
                                 continue

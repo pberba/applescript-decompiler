@@ -1,4 +1,3 @@
--- test: xfail properties of script objects created in handlers (incl. parent) are lost
 -- Task queue: script-object "classes" with inheritance and continue,
 -- factories that capture handler parameters, a retry loop with error
 -- numbers, an NSMutableArray-backed queue and an NSMutableOrderedSet.
