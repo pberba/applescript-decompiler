@@ -882,6 +882,8 @@ def convert_literal(lit, target=None):
     if isinstance(lit, list) and len(lit) == 3 and lit[0] == 4 and isinstance(lit[2], list):
         # list value: [4, count, [?, item, item, ...]]
         return ListLiteral(elements=[convert_literal(e) for e in lit[2][1:]])
+    if isinstance(lit, list) and len(lit) == 3 and lit[0] == 4 and lit[1] == rto.Fixnum(0):
+        return ListLiteral(elements=[])  # empty list value: [4, 0, nil]
     if isinstance(lit, rto.Binding):  # record value: chain of label/value bindings
         fields = []
         while isinstance(lit, rto.Binding):
