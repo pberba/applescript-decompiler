@@ -739,7 +739,11 @@ def decompile_script(
                     # The handler's final, implicit Return: the value is the
                     # result of the last statement, not an explicit `return`.
                     _curr = _stack.pop()
-                    if isinstance(_curr, (ScriptBlock, Handler, PropertyDecl)):
+                    if _prev_op == "GetResult":
+                        # A blank line after a trailing block compiles to
+                        # StoreResult; GetResult (an empty statement)
+                        _statements.append(EmptyStatement())
+                    elif isinstance(_curr, (ScriptBlock, Handler, PropertyDecl)):
                         _statements.append(_curr)
                     else:
                         _statements.append(ExprStatement(expr=_curr))
@@ -856,8 +860,8 @@ def decompile_script(
 
             # elif op == 'Quotient':
             #     pass
-            # elif op == 'GetResult':
-            #     pass
+            elif op == "GetResult":
+                _stack.append(Keyword(value="rslt"))  # `result`
             # elif op == 'StartsWith':
             #     pass
             # elif op == 'EndsWith':

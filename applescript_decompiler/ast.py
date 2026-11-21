@@ -261,6 +261,9 @@ class AppleScriptPrinter:
     def visit_UseStatement(self, node: UseStatement, indent: int = 0) -> str:
         return f"{self._i(indent)}use {node.text}"
 
+    def visit_EmptyStatement(self, node: EmptyStatement, indent: int = 0) -> str:
+        return ""
+
     def visit_ScriptBlock(self, node: ScriptBlock, indent: int = 0) -> str:
         lines = [f"{self._i(indent)}script {node.name}"]
         if node.parent:
@@ -687,6 +690,12 @@ class TellBlock(Statement):
 class UseStatement(Statement):
     # `use framework "Foundation"`, `use scripting additions`, ...
     text: str
+
+
+@dataclass
+class EmptyStatement(Statement):
+    # a blank line; compiles to StoreResult; GetResult after a block
+    pass
 
 
 @dataclass
