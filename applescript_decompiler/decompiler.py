@@ -371,13 +371,12 @@ def run_decompiler(f, add_comments=False, force=False, analyzer=None, debug=Fals
                     _var = _stack.pop()
                     _stack.pop()
                     _range = BinaryOp(op=BinaryOpKind.THRU, left=_from, right=_to)
-
-                    _range_of = BinaryOp(
-                        op=BinaryOpKind.GET_PROPERTY, left=_range, right=_var
-                    )
+                    # `item 2 thru 4 of L`
                     _stack.append(
                         BinaryOp(
-                            op=BinaryOpKind.GET_PROPERTY, left=_prop, right=_range_of
+                            op=BinaryOpKind.GET_PROPERTY,
+                            left=BinaryOp(op=BinaryOpKind.GET_INDEXED, left=_prop, right=_range),
+                            right=_var,
                         )
                     )
                 else:
