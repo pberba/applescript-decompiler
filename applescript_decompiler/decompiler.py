@@ -412,9 +412,7 @@ def decompile_script(
                     # `middle item of L`
                     _cls = _stack.pop()
                     _obj = _stack.pop()
-                    _middle = BinaryOp(
-                        op=BinaryOpKind.GET_INDEXED, left=VariableRef("middle"), right=_cls
-                    )
+                    _middle = UnaryOp(op=UnaryOpKind.MIDDLE, operand=_cls)
                     _stack.append(
                         BinaryOp(op=BinaryOpKind.GET_PROPERTY, left=_middle, right=_obj)
                     )
@@ -463,7 +461,7 @@ def decompile_script(
                     # `some item of L`
                     _cls = _stack.pop()
                     _obj = _stack.pop()
-                    _some = BinaryOp(op=BinaryOpKind.GET_INDEXED, left=VariableRef("some"), right=_cls)
+                    _some = UnaryOp(op=UnaryOpKind.SOME, operand=_cls)
                     _stack.append(BinaryOp(op=BinaryOpKind.GET_PROPERTY, left=_some, right=_obj))
                 elif t in (28, 29):
                     # `item before X` / `item after X`; stack: container, class

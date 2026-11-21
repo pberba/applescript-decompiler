@@ -516,6 +516,10 @@ class AppleScriptPrinter:
             return f"end of ({operand})"
         elif node.op is UnaryOpKind.REFERENCE_TO:
             return f"a reference to ({operand})"
+        elif node.op is UnaryOpKind.MIDDLE:
+            return f"middle {operand}"
+        elif node.op is UnaryOpKind.SOME:
+            return f"some {operand}"
         return operand
 
     def visit_Copied(self, node: Copied, indent: int = 0) -> str:
@@ -903,6 +907,8 @@ class UnaryOpKind(Enum):
     END_OF = auto()
     BEGINNING_OF = auto()
     REFERENCE_TO = auto()  # a reference to X
+    MIDDLE = auto()  # middle <class>, as in `middle item of L`
+    SOME = auto()  # some <class>
 
 
 UNARY_OP_MAPPING = {"Negate": UnaryOpKind.NEG, "Not": UnaryOpKind.NOT}
