@@ -1,4 +1,3 @@
--- test: xfail stored references (`a reference to current application's NSString`) lose their value
 -- JSON + regex pipeline: build nested records/lists, serialise with
 -- NSJSONSerialization (sorted keys), parse back, walk the result
 -- recursively, and pull numbers out of free text with NSRegularExpression.

@@ -254,7 +254,8 @@ def decompile_script(
                     curr_index -= 1
                 _block = block_stack[curr_index]
 
-                if isinstance(_block, IfStatement):
+                # (a backward jump is a loop's, even when the loop is in an if)
+                if isinstance(_block, IfStatement) and _address > _curr_pos:
                     _block.end_if_pos = _address
                     if _stack:
                         if _var is not None:
