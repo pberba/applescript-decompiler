@@ -869,6 +869,29 @@ def number_to_code(num):
     return num.to_bytes(num_bytes, "big").decode("ascii")
 
 
+def convert_reference(spec):
+    """A stored object specifier: [form, container, class/property, key...]."""
+    if not (isinstance(spec, list) and len(spec) >= 3):
+        return convert_literal(spec)
+    form, cont = spec[0], spec[1]
+    if isinstance(cont, list) and cont and cont[0] == 15:
+        container = VariableRef(name="__it__")  # the script itself
+    elif isinstance(cont, list):
+        container = convert_reference(cont)
+    else:
+        container = convert_literal(cont)
+    if form == 21:  # property
+        return BinaryOp(op=BinaryOpKind.GET_PROPERTY, left=convert_literal(spec[2]), right=container)
+    if form == 22:  # every
+        return BinaryOp(op=BinaryOpKind.EVERY, left=container, right=convert_literal(spec[2]))
+    if form == 24 and len(spec) >= 4:  # indexed / named
+        indexed = BinaryOp(
+            op=BinaryOpKind.GET_INDEXED, left=convert_literal(spec[2]), right=convert_literal(spec[3])
+        )
+        return BinaryOp(op=BinaryOpKind.GET_PROPERTY, left=indexed, right=container)
+    return VariableRef(name="__unknown_reference__")
+
+
 def convert_literal(lit, target=None):
     if isinstance(lit, list) and lit == [19]:
         # the object being tested in a `whose` clause; behaves like `it`
@@ -879,6 +902,9 @@ def convert_literal(lit, target=None):
             elements.append(convert_literal(lit.first))
             lit = lit.second
         return ListLiteral(elements=elements)
+    if isinstance(lit, list) and len(lit) == 2 and lit[0] == 20 and isinstance(lit[1], list):
+        # stored reference, e.g. `property P : a reference to current application's NSString`
+        return UnaryOp(op=UnaryOpKind.REFERENCE_TO, operand=convert_reference(lit[1]))
     if isinstance(lit, list) and len(lit) == 3 and lit[0] == 4 and isinstance(lit[2], list):
         # list value: [4, count, [?, item, item, ...]]
         return ListLiteral(elements=[convert_literal(e) for e in lit[2][1:]])
