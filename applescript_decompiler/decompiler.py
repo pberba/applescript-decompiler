@@ -647,22 +647,20 @@ def decompile_script(
                 _block.by_expr = _by
                 _block.counter_var = VariableRef(v)
             elif op == "Return":
-                # A call left on the stack by the very last Return is the
-                # implicit result of the last statement; anywhere else it is
-                # an explicit `return f()`.
                 if _stack and _var is not None:
                     # The handler's last statement is an assignment: the
                     # implicit Return follows Pop*/SetData with no StoreResult.
                     _statements.append(SetStatement(target=LValue(obj=_var), value=_stack.pop()))
                     _var = None
-                elif _stack and state["pos"] >= len(code) and (
-                    isinstance(_stack[-1], CommandCall)
-                    or isinstance(_stack[-1], HandlerCall)
-                ):
+                elif _stack and state["pos"] >= len(code):
+                    # The handler's final, implicit Return: the value is the
+                    # result of the last statement, not an explicit `return`.
                     _statements.append(ExprStatement(expr=_stack.pop()))
                 elif _stack:
                     _statements.append(ReturnStatement(value=_stack.pop()))
-                elif op != _prev_op:
+                elif op != _prev_op and state["pos"] < len(code):
+                    # (a bare final Return is implicit; printing `return`
+                    # would discard the last statement's result)
                     _statements.append(ReturnStatement())
 
             elif op == "MakeVector":
