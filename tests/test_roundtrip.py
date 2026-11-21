@@ -11,6 +11,10 @@ For every fixture in tests/fixtures:
 3. **run output**: run the original and the decompiled script with
    `osascript` and compare what they print.
 
+The e2e_* fixtures are larger, realistic scripts (AppleScriptObjC, nested
+script objects, closures, error handling); their run-only builds are kept
+next to them as .scpt files for manual use.
+
 Fixtures can start with marker lines:
   -- test: no-run           skip the run-output test (talks to other apps,
                             shows dialogs)
