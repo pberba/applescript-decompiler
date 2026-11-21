@@ -43,10 +43,13 @@ options:
 
 #### JXA
 
-Compiled JavaScript for Automation scripts (`osacompile -l JavaScript`, even
-with `-x`) keep their source text in the file, so for JXA the tool prints the
-original source. `.scptd` and `.app` bundles are accepted for both languages
-(the script is `Contents/Resources/Scripts/main.scpt`).
+A compiled JavaScript for Automation script (`osacompile -l JavaScript`, even
+with `-x`) is not bytecode: the file stores the original JavaScript source as
+text. Nothing needs to be decompiled, so the tool reads the source directly
+from the file and prints it as is. The AppleScript options (`--analyzer`,
+`--comments`, `--force`, `--debug`) don't apply to JXA scripts. `.scptd` and
+`.app` bundles are accepted for both languages (the script is
+`Contents/Resources/Scripts/main.scpt`).
 
 #### Demo
 
