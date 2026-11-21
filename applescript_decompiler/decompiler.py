@@ -314,6 +314,19 @@ def run_decompiler(f, add_comments=False, force=False, analyzer=None, debug=Fals
                 if sub_operation == "GetPositionEnd":
                     operand = _stack.pop()
                     _stack.append(UnaryOp(op=UnaryOpKind.END_OF, operand=operand))
+                elif sub_operation == "GetPositionBeginning":
+                    operand = _stack.pop()
+                    _stack.append(UnaryOp(op=UnaryOpKind.BEGINNING_OF, operand=operand))
+                elif sub_operation == "GetMiddle":
+                    # `middle item of L`
+                    _cls = _stack.pop()
+                    _obj = _stack.pop()
+                    _middle = BinaryOp(
+                        op=BinaryOpKind.GET_INDEXED, left=VariableRef("middle"), right=_cls
+                    )
+                    _stack.append(
+                        BinaryOp(op=BinaryOpKind.GET_PROPERTY, left=_middle, right=_obj)
+                    )
                 elif sub_operation == "GetProperty":
                     l = _stack.pop()
                     r = _stack.pop()

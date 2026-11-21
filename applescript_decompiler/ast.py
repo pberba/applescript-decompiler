@@ -388,6 +388,8 @@ class AppleScriptPrinter:
             return f"-({operand})"
         elif node.op is UnaryOpKind.NOT:
             return f"not ({operand})"
+        elif node.op is UnaryOpKind.BEGINNING_OF:
+            return f"beginning of ({operand})"
         elif node.op is UnaryOpKind.END_OF:
             return f"end of ({operand})"
         return operand
@@ -708,6 +710,7 @@ class UnaryOpKind(Enum):
     NEG = auto()  # -x
     NOT = auto()  # not x
     END_OF = auto()
+    BEGINNING_OF = auto()
 
 
 UNARY_OP_MAPPING = {"Negate": UnaryOpKind.NEG, "Not": UnaryOpKind.NOT}
