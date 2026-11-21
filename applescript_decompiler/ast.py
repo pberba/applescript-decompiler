@@ -14,6 +14,14 @@ from applescript_decompiler.utils import *
 EVENT_CODES = get_event_code_mapping()
 SDEFS = load_sdefs_from_package()
 ENUMERATORS = load_enumerators_from_package()
+# Standard Additions classes/properties/enumerations (not command
+# parameters, whose codes mean something only for their command)
+STANDARD_ADDITIONS_TERMS = {}
+for _i in range(0, len(DATA) - 3, 4):
+    if DATA[_i + 3].startswith("Standard Additions") and not DATA[_i + 2].startswith(
+        ("Parameter", "Command")
+    ):
+        STANDARD_ADDITIONS_TERMS.setdefault(DATA[_i].strip("'"), DATA[_i + 1])
 
 # considering/ignoring attributes, stored as 'cons' + attribute code
 CONSIDERATIONS = {
@@ -351,8 +359,8 @@ class AppleScriptPrinter:
             and node.value[4:] in EVENT_CODES[DEFAULT_TARGET]
         ):
             return f"{EVENT_CODES[DEFAULT_TARGET][node.value[4:]]}"
-        if node.value in EVENT_CODES[STANDARD_ADDITIONS]:  # e.g. 'ppor' port
-            return EVENT_CODES[STANDARD_ADDITIONS][node.value]
+        if node.value in STANDARD_ADDITIONS_TERMS:  # e.g. 'ppor' port
+            return STANDARD_ADDITIONS_TERMS[node.value]
         # enumerated values: 'rndS', or 'olierndS' (enumeration + enumerator)
         if node.value in ENUMERATORS:
             return ENUMERATORS[node.value]
