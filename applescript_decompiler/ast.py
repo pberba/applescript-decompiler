@@ -226,6 +226,14 @@ class AppleScriptPrinter:
             footer = f"{self._i(indent)}end try"
             return f"{header}\n{try_block}\n{footer}"
 
+    def visit_TimeoutBlock(self, node: TimeoutBlock, indent: int = 0) -> str:
+        body_lines = [self.visit(stmt, indent + 1) for stmt in node.body]
+        return "\n".join(
+            [f"{self._i(indent)}with timeout of {self.visit(node.timeout, 0)} seconds"]
+            + body_lines
+            + [f"{self._i(indent)}end timeout"]
+        )
+
     def visit_ConsideringBlock(self, node: ConsideringBlock, indent: int = 0) -> str:
         cons = ", ".join(self.visit(a, 0) for a in node.considering)
         ign = ", ".join(self.visit(a, 0) for a in node.ignoring)
@@ -602,6 +610,12 @@ class ScriptBlock(Statement):
     name: str
     script: Script
     parent: Optional[str] = None  # `property parent : Base`
+
+
+@dataclass
+class TimeoutBlock(TellBlock):
+    # `with timeout of N seconds` ... `end timeout`; `target` is unused
+    timeout: Optional[Expression] = None
 
 
 @dataclass

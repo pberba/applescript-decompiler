@@ -322,11 +322,13 @@ def decompile_script(
                         ignoring=_ignoring.elements,
                     )
                 )
+            elif op == "BeginTimeout":
+                block_stack.append(TimeoutBlock(target=None, body=[], timeout=_stack.pop()))
             elif op == "PushEmpty":
                 _stack.append(ListLiteral(elements=[]))
-            elif op in ("EndTell", "EndConsider"):
-                # Look for the containing TellBlock / ConsideringBlock
-                _kind = TellBlock if op == "EndTell" else ConsideringBlock
+            elif op in ("EndTell", "EndConsider", "EndTimeout"):
+                # Look for the containing TellBlock / ConsideringBlock / TimeoutBlock
+                _kind = {"EndTell": TellBlock, "EndConsider": ConsideringBlock}.get(op, TimeoutBlock)
                 curr_index = -1
                 while not isinstance(block_stack[curr_index], _kind):
                     curr_index -= 1
