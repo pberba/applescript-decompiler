@@ -342,6 +342,9 @@ class AppleScriptPrinter:
             BinaryOpKind.GT: ">",
             BinaryOpKind.GE: "≥",
             BinaryOpKind.CONTAINS: "contains",
+            BinaryOpKind.QUOTIENT: "div",
+            BinaryOpKind.STARTS_WITH: "starts with",
+            BinaryOpKind.ENDS_WITH: "ends with",
             BinaryOpKind.COERCE: "as",  # handled specially
             BinaryOpKind.GET_PROPERTY: "'s",  # handled specially
             BinaryOpKind.GET_INDEXED: "_",    # handled specially
@@ -602,6 +605,9 @@ class BinaryOpKind(Enum):
 
     COERCE = auto()  # x as type
     CONTAINS = auto()
+    QUOTIENT = auto()  # div
+    STARTS_WITH = auto()
+    ENDS_WITH = auto()
 
     GET_INDEXED = auto()  # X Y
     GET_PROPERTY = auto()  # X of Y
@@ -629,6 +635,9 @@ BINARY_OP_MAPPING = {
     "GreaterThanOrEqual": BinaryOpKind.GE,
     "Coerce": BinaryOpKind.COERCE,
     "Contains": BinaryOpKind.CONTAINS,
+    "Quotient": BinaryOpKind.QUOTIENT,
+    "StartsWith": BinaryOpKind.STARTS_WITH,
+    "EndsWith": BinaryOpKind.ENDS_WITH,
     # 'And'                 : BinaryOpKind.AND,
     # 'Or'                  : BinaryOpKind.OR,
 }
