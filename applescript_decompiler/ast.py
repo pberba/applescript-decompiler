@@ -822,14 +822,6 @@ class BinaryOpKind(Enum):
 
     COERCE = auto()  # x as type
     CONTAINS = auto()
-    WHOSE = auto()  # X whose Y
-    BY_ID = auto()  # window id 5
-    BY_NAME = auto()  # file named "x"
-    BEFORE = auto()  # item before X
-    AFTER = auto()  # item after X
-    QUOTIENT = auto()  # div
-    STARTS_WITH = auto()
-    ENDS_WITH = auto()
 
     GET_INDEXED = auto()  # X Y
     GET_PROPERTY = auto()  # X of Y
@@ -839,6 +831,16 @@ class BinaryOpKind(Enum):
 
     AND = auto()
     OR = auto()
+
+    # added later; kept at the end so existing values don't change
+    QUOTIENT = auto()  # div
+    STARTS_WITH = auto()
+    ENDS_WITH = auto()
+    WHOSE = auto()  # X whose Y
+    BY_ID = auto()  # window id 5
+    BY_NAME = auto()  # file named "x"
+    BEFORE = auto()  # item before X
+    AFTER = auto()  # item after X
 
 
 BINARY_OP_MAPPING = {
