@@ -7,6 +7,7 @@ from jinmo_applescript_disassembler.engine.fasparser import Loader
 
 from applescript_decompiler.ast import *
 from applescript_decompiler.utils import load_object
+from applescript_decompiler.jxa import extract_jxa_source, is_jxa, resolve_script_path
 import jinmo_applescript_disassembler.engine.runtimeobjects as rto
 
 # Labels of the variables in `on error msg number n from f partial result p to t`
@@ -1071,19 +1072,30 @@ def cli():
     if args.analyzer:
         analyzer = load_object(analyzer_mapping.get(args.analyzer, args.analyzer))
 
+    if is_jxa(path):
+        # JavaScript for Automation: the source is stored as text
+        print(f'// {path}')
+        print('// JavaScript for Automation (JXA): source stored in the script, not compiled')
+        print('-----')
+        print(extract_jxa_source(path))
+        return
+
     print(f'-- {path}')
     print('--')
     f = Loader()
-    f = f.load(path)
+    f = f.load(resolve_script_path(path))
     run_decompiler(f, add_comments=args.comments, force=args.force, analyzer=analyzer, debug=args.debug)
 
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        prog="applescript_decompile", description="AppleScript .scpt decompiler"
+        prog="applescript_decompile",
+        description="AppleScript .scpt decompiler (also extracts the source of JXA scripts)",
     )
 
-    parser.add_argument("scpt", help="Path to a compiled AppleScript .scpt file")
+    parser.add_argument(
+        "scpt", help="Path to a compiled .scpt file (AppleScript or JXA), or a .scptd/.app bundle"
+    )
     parser.add_argument(
         "-c",
         "--comments",

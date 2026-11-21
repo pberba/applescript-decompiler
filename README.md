@@ -27,10 +27,10 @@ uv run sync
 ```shell
 usage: applescript_decompile [-h] [-c] [-f] [-d] [--analyzer ANALYZER] scpt
 
-AppleScript .scpt decompiler
+AppleScript .scpt decompiler (also extracts the source of JXA scripts)
 
 positional arguments:
-  scpt                 Path to a compiled AppleScript .scpt file
+  scpt                 Path to a compiled .scpt file (AppleScript or JXA), or a .scptd/.app bundle
 
 options:
   -h, --help           show this help message and exit
@@ -40,6 +40,13 @@ options:
   --analyzer ANALYZER  Dotted path to analyzer class like applescript_decompiler.OSAMinerDecryptAnalyzer, applescript_decompiler.NaiveStringAnalyzer, or local.MyAnalyzer (for a file in local.py)
 
 ```
+
+#### JXA
+
+Compiled JavaScript for Automation scripts (`osacompile -l JavaScript`, even
+with `-x`) keep their source text in the file, so for JXA the tool prints the
+original source. `.scptd` and `.app` bundles are accepted for both languages
+(the script is `Contents/Resources/Scripts/main.scpt`).
 
 #### Demo
 
