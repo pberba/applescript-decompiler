@@ -19,6 +19,7 @@ ROOT_OFFSET = -1
 # function object
 NAME_OFFSET = 0
 ARGS_OFFSET = 2
+LABELED_OFFSET = 3  # labeled parameters (`given name:n`), a Binding chain
 LOCALS_OFFSET = 4  # local variable names; kept even in run-only scripts
 LITERAL_OFFSET = 5
 CODE_OFFSET = 6
@@ -78,13 +79,23 @@ def run_decompiler(f, add_comments=False, force=False, analyzer=None, debug=Fals
         else:
             print("-- <empty or unknown>")
 
+        _labeled = []
+        _binding = function[LABELED_OFFSET + 1]
+        while isinstance(_binding, rto.Binding) and isinstance(_binding.b, bytes):
+            _labeled.append((convert_literal(_binding.a), _binding.b.decode()))
+            _binding = _binding.next
+
         handler = Handler(
             name=name.decode() if isinstance(name, bytes) else name,
             parameters=[e.decode() if isinstance(e, bytes) else str(e) for e in _args],
             body=[],
+            labeled=_labeled,
         )
 
         code = bytearray(function[CODE_OFFSET + 1].value)
+
+        def word_at(pos):
+            return struct.unpack(">H", code[pos : pos + 2])[0]
 
         def word():
             r = struct.unpack(">H", code[state["pos"] : state["pos"] + 2])[0]
@@ -405,6 +416,25 @@ def run_decompiler(f, add_comments=False, force=False, analyzer=None, debug=Fals
                     condition=_cond, else_pos=_else_pos, then_block=[], else_block=[]
                 )
                 block_stack.append(_block)
+            elif op == "MessageSend" and isinstance(literal(word_at(state["pos"])), bytes):
+                # A user handler called with labeled parameters:
+                # `greet given name:"bob"` (stack: target, label/value pairs, count)
+                v = word()
+                _comment += str(v) + " # " + str(literal(v))
+                args_count = _stack.pop().value
+                args = _stack[len(_stack) - args_count:]
+                _stack = _stack[: len(_stack) - args_count]
+                _target = _stack.pop()
+                if isinstance(_target, VariableRef) and _target.name == "__it__":
+                    _target = None
+                _stack.append(
+                    HandlerCall(
+                        handler_name=literal(v).decode(),
+                        arguments=[],
+                        target=_target,
+                        labeled=[(args[i], args[i + 1]) for i in range(0, len(args) - 1, 2)],
+                    )
+                )
             elif op == "MessageSend":
                 v = word()
                 event_code = number_to_code(

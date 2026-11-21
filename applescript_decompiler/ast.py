@@ -105,6 +105,11 @@ class AppleScriptPrinter:
                     "ascii"
                 ) + val.identifier[1].to_bytes(4, "big").decode("ascii")
 
+        if node.labeled:
+            params = " given " + ", ".join(
+                f"{self.visit(label, 0)}:{var}" for label, var in node.labeled
+            )
+
         header = f"{self._i(indent)}on {_node_name}{params}"
 
         body_lines = [self.visit(stmt, indent + 1) for stmt in node.body]
@@ -126,6 +131,11 @@ class AppleScriptPrinter:
             if target_src != "my":
                 target_src = target_src + "'s"
             target_src = target_src + " "
+        if node.labeled:
+            given = ", ".join(
+                f"{self.visit(label, 0)}:{self.visit(value, 0)}" for label, value in node.labeled
+            )
+            return f"{self._i(indent)}{target_src}{node.handler_name} given {given}"
         return f"{self._i(indent)}{target_src}{node.handler_name}({args_src})"
 
     def visit_SetStatement(self, node: SetStatement, indent: int = 0) -> str:
@@ -479,6 +489,8 @@ class Handler(Node):
     name: str
     parameters: List[str] = field(default_factory=list)
     body: List[Statement] = field(default_factory=list)
+    # `on greet given name:n` -> [(label, "n")]
+    labeled: List[Any] = field(default_factory=list)
 
 
 @dataclass
@@ -486,6 +498,8 @@ class HandlerCall(Expression):
     handler_name: str
     arguments: List[Expression]
     target: Optional[Expression] = None  # `my` or some script object
+    # `greet given name:"bob"` -> [(label, value)]
+    labeled: List[Any] = field(default_factory=list)
 
 
 @dataclass
