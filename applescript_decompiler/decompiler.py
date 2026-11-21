@@ -557,7 +557,7 @@ def decompile_script(
 
                 if _stack:
                     _target = _stack.pop()
-                    if _target.name == "__it__":
+                    if getattr(_target, "name", None) == "__it__":
                         _target = None
                 else:
                     _target = None
