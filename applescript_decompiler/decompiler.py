@@ -22,6 +22,7 @@ CODE_OFFSET = 6
 
 def run_decompiler(f, add_comments=False, force=False, analyzer=None, debug=False):
     root = f[ROOT_OFFSET]
+    scopes = [root[1] if isinstance(root[1], list) else []]
 
     # assert code['kind'] == 'untypedPointerBlock'  # I think it doesn't matter
     def decompile(function_offset, add_comments=False):  # function number
@@ -85,6 +86,14 @@ def run_decompiler(f, add_comments=False, force=False, analyzer=None, debug=Fals
         local_names = function[LOCALS_OFFSET + 1]
         if not isinstance(local_names, list):
             local_names = []
+
+        def parent_variable(depth, x):
+            # Operands are (depth, index): depth 1 is the enclosing script,
+            # whose names (properties, handlers, script objects) are root[1].
+            names = scopes[depth - 1] if 1 <= depth <= len(scopes) else []
+            if 0 <= x < len(names) and isinstance(names[x], bytes):
+                return names[x].decode()
+            return "parent_%d_%d" % (depth, x)
 
         def variable(x, local=False):
             if 0 <= x < len(local_names) and isinstance(local_names[x], bytes):
@@ -516,12 +525,12 @@ def run_decompiler(f, add_comments=False, force=False, analyzer=None, debug=Fals
             elif op == "HandleError":
                 _comment += " " + variable(word()) + " " + variable(word())
             elif op == "PushParentVariable":
-                v = "[parent]" + variable(word())
-                _comment += " " + str(word()) + " " + v + " "
+                v = parent_variable(word(), word())
+                _comment += " " + v + " "
                 _stack.append(VariableRef(v))
             elif op == "PopParentVariable":
-                v = "[parent]" + variable(word())
-                _comment += " " + str(word()) + " " + v + " "
+                v = parent_variable(word(), word())
+                _comment += " " + v + " "
                 _var = VariableRef(v)
             elif op == "Error":
                 args_count = _stack.pop()
