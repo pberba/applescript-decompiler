@@ -211,6 +211,14 @@ def decompile_script(
             if op == "Jump":
                 _address = _curr_pos + 1 + word()
                 _comment += hex(_address) + " "
+                if _address < _curr_pos:
+                    # Jump back to the top of a loop: the body's last value
+                    # was Dup'ed for the loop result; drop what's left over.
+                    _loop = next(
+                        (b for b in reversed(block_stack) if isinstance(b, RepeatStatement)), None
+                    )
+                    if _loop is not None:
+                        del _stack[_loop.stack_depth :]
                 # Assume repeat blocks follow proper jump
                 # Use Jump address to infer `else` block for `if-then-else`
                 curr_index = len(block_stack) - 1
@@ -281,23 +289,7 @@ def decompile_script(
                 _comment += str(v) + " "
                 _var = VariableRef(v)
             elif op == "Dup" and _stack:
-                curr_index = len(block_stack) - 1
-                # Find enclosing `RepeatStatement`
-                while curr_index > 0 and not isinstance(
-                    block_stack[curr_index], RepeatStatement
-                ):
-                    curr_index -= 1
-
-                _block = block_stack[curr_index]
-                # Repeat blocks have a random Dup in them Not really sure what
-                # they are for. We can just ignore them?
-                if (
-                    isinstance(_block, RepeatStatement)
-                    and _block.kind != RepeatKind.FOREVER
-                ):
-                    pass
-                else:
-                    _stack.append(_stack[-1])
+                _stack.append(_stack[-1])
             elif op == "GCSwap" and len(_stack) >= 2:
                 _stack[-1], _stack[-2] = _stack[-2], _stack[-1]
             elif op == "Pop" and _stack and _prev_op != "PushUndefined":
@@ -612,11 +604,9 @@ def decompile_script(
             elif op == "LinkRepeat":
                 v = word() + _curr_pos + 1
                 _comment += hex(v) + " "
-                block_stack.append(
-                    RepeatStatement(
-                        kind=RepeatKind.FOREVER, end_repeat_pos=v  # By default
-                    )
-                )
+                _repeat = RepeatStatement(kind=RepeatKind.FOREVER, end_repeat_pos=v)  # By default
+                _repeat.stack_depth = len(_stack)
+                block_stack.append(_repeat)
             elif op == "RepeatNTimes":
                 _stack.pop()  # remove PushOne
                 N = _stack.pop()
