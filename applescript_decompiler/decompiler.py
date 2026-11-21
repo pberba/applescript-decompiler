@@ -445,8 +445,10 @@ def run_decompiler(f, add_comments=False, force=False, analyzer=None, debug=Fals
                 _block.by_expr = _by
                 _block.counter_var = VariableRef(v)
             elif op == "Return":
-                # TODO Make Return Robust
-                if _stack and (
+                # A call left on the stack by the very last Return is the
+                # implicit result of the last statement; anywhere else it is
+                # an explicit `return f()`.
+                if _stack and state["pos"] >= len(code) and (
                     isinstance(_stack[-1], CommandCall)
                     or isinstance(_stack[-1], HandlerCall)
                 ):
