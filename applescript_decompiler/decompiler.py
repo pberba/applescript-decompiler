@@ -198,6 +198,7 @@ def decompile_script(
         _var = None
         _prev_op = None
         _closed_value = None  # value that ended the last closed else branch
+        _pattern = []  # targets of a pending `set {a, b} to ...`
 
         while state["pos"] < len(code):
             _curr_pos = state["pos"]
@@ -318,7 +319,18 @@ def decompile_script(
                 _stack[-1], _stack[-2] = _stack[-2], _stack[-1]
             elif op == "Pop" and _stack and _prev_op != "PushUndefined":
                 # (PushUndefined pushes nothing here, so its Pop is skipped)
-                _stack.pop()
+                _popped = _stack.pop()
+                if (
+                    _var is not None
+                    and isinstance(_popped, BinaryOp)
+                    and _popped.op is BinaryOpKind.GET_PROPERTY
+                    and _stack
+                    and _popped.right is _stack[-1]
+                ):
+                    # `set {a, b} to L`: each target is assigned `item i of`
+                    # a Dup of L and popped; StoreResult then pops L itself
+                    _pattern.append(_var)
+                    _var = None
             elif op in BINARY_OP_MAPPING:
                 r = _stack.pop()
                 l = _stack.pop()
@@ -640,7 +652,12 @@ def decompile_script(
                 )
             elif op == "StoreResult" and _stack:
                 _curr = _stack.pop()
-                if _curr is _closed_value:
+                if _pattern:
+                    _statements.append(
+                        SetStatement(target=LValue(obj=ListLiteral(elements=_pattern)), value=_curr)
+                    )
+                    _pattern = []
+                elif _curr is _closed_value:
                     # a Dup'ed copy of the value that ended an else branch,
                     # already emitted there (the Dup ran before the if closed)
                     pass
