@@ -1,4 +1,3 @@
--- test: xfail `local` declarations are not emitted
 on run
 	local a
 	set a to 1

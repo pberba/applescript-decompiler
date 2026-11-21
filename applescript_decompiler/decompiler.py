@@ -120,6 +120,7 @@ def decompile_script(
             _labeled.append((convert_literal(_binding.a), _binding.b.decode()))
             _binding = _binding.next
 
+        _bound = set()  # locals bound by loops, `on error` and `script` blocks
         handler = Handler(
             name=name.decode() if isinstance(name, bytes) else name,
             parameters=[e.decode() if isinstance(e, bytes) else str(e) for e in _args],
@@ -557,6 +558,7 @@ def decompile_script(
                 _comment += str(v) + " "
                 _stack.pop()
                 _script_name = _stack.pop()
+                _bound.add(_script_name.name)
                 _closure = literal(v)
                 _closure_locals = _closure[LOCALS_OFFSET + 1]
                 _handlers = [
@@ -644,6 +646,7 @@ def decompile_script(
                 _block.condition = cond
             elif op == "RepeatInCollection":
                 v = variable(word())
+                _bound.add(v)
                 _comment += v
                 _stack.pop()  # Push1
                 _stack.pop()  # Result of len(_arr)
@@ -654,6 +657,7 @@ def decompile_script(
                 _block.in_expr = _arr
             elif op == "RepeatInRange":
                 v = variable(word())
+                _bound.add(v)
                 _comment += v
 
                 _by = _stack.pop()
@@ -745,9 +749,11 @@ def decompile_script(
                 _vars = []
                 if isinstance(_msg, bytes):
                     _vars.append(_msg.decode())
+                    _bound.add(_msg.decode())
                 while isinstance(_labeled, rto.Binding) and isinstance(_labeled.b, bytes):
                     _label = number_to_code(_labeled.a.value.value)
                     _vars.append(ERROR_LABELS.get(_label, _label) + " " + _labeled.b.decode())
+                    _bound.add(_labeled.b.decode())
                     _labeled = _labeled.next
                 curr_index = len(block_stack) - 1
                 while curr_index > 0 and not isinstance(block_stack[curr_index], TryStatement):
@@ -890,6 +896,16 @@ def decompile_script(
             # if _comment is not None and add_comments:
             #     block_stack[0].body.append(Comment(comment=_comment))
 
+        if isinstance(name, rto.Object):  # run (event) handler
+            # Undeclared variables in the run handler are globals; locals
+            # other than loop/error variables and scripts were declared.
+            _declared = [
+                n.decode()
+                for n in local_names
+                if isinstance(n, bytes) and n.decode() not in _bound and n not in _args
+            ]
+            if _declared:
+                block_stack[0].body.insert(0, VariableDeclaration(names=_declared))
         return block_stack[0]
 
     handlers = []
