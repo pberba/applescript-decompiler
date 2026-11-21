@@ -51,6 +51,17 @@ def decompile_script(
 
         print("-- === data offset %d ===" % function_offset)
 
+        names = root[1] if isinstance(root[1], list) else []
+        member = names[function_offset - 2] if function_offset - 2 < len(names) else None
+        if (
+            isinstance(member, rto.Object)
+            and isinstance(member.value, rto.Constant)
+            and number_to_code(member.value.value) == "pimr"
+        ):
+            print("-- use clauses")
+            uses.extend(use_clauses(function))
+            return
+
         if type(function) is not list:
             print("-- <not a function>")
             # A script-level value that isn't a handler is a property
@@ -856,6 +867,7 @@ def decompile_script(
         return block_stack[0]
 
     handlers = []
+    uses = []
     properties = []
     globals_used = []
     for cur_function_offset in range(2, len(root)):
@@ -873,7 +885,39 @@ def decompile_script(
         properties.insert(
             0, VariableDeclaration(names=[g.decode() for g in globals_used], is_global=True)
         )
-    return Script(properties=properties, handlers=handlers)
+    return Script(properties=uses + properties, handlers=handlers)
+
+
+USE_CLASSES = {"frmk": "framework", "scpt": "script"}
+
+
+def use_clauses(value):
+    """`use` clauses are stored in the `pimr` property as a list of
+    one-field records: `vers` (AppleScript version) or `cobj` (a stored
+    reference such as framework "Foundation", or every scripting addition).
+    """
+    uses = []
+    items = value[2][1:] if isinstance(value, list) and len(value) > 2 else []
+    for b in items:
+        if not isinstance(b, rto.Binding):
+            continue
+        label = number_to_code(b.a.value.value) if isinstance(b.a, rto.Object) else None
+        ref = b.b
+        if label == "vers":
+            text = "AppleScript version " + convert_literal(ref).to_source()
+        elif isinstance(ref, list) and len(ref) > 1 and ref[0] == 20 and isinstance(ref[1], list):
+            spec = ref[1]
+            if spec[0] == 22 and number_to_code(spec[2].value.value) == "osax":
+                text = "scripting additions"
+            elif spec[0] == 24 and len(spec) > 3:
+                cls = number_to_code(spec[2].value.value)
+                text = USE_CLASSES.get(cls, cls) + " " + convert_literal(spec[3]).to_source()
+            else:
+                continue
+        else:
+            text = convert_literal(ref).to_source()  # e.g. application "Finder"
+        uses.append(UseStatement(text=text))
+    return uses
 
 
 def cli():

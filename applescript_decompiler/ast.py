@@ -239,6 +239,9 @@ class AppleScriptPrinter:
             [f"{self._i(indent)}{header}"] + body_lines + [f"{self._i(indent)}{footer}"]
         )
 
+    def visit_UseStatement(self, node: UseStatement, indent: int = 0) -> str:
+        return f"{self._i(indent)}use {node.text}"
+
     def visit_ScriptBlock(self, node: ScriptBlock, indent: int = 0) -> str:
         lines = [f"{self._i(indent)}script {node.name}"]
         if node.parent:
@@ -585,6 +588,12 @@ class TellBlock(Statement):
     target: Expression
     body: List[Statement]
     is_done: Optional[bool] = False
+
+
+@dataclass
+class UseStatement(Statement):
+    # `use framework "Foundation"`, `use scripting additions`, ...
+    text: str
 
 
 @dataclass
