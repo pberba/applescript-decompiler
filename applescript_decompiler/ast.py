@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import List, Optional, Union, Dict, Any
 import json
+import re
 
 import warnings
 
@@ -342,6 +343,8 @@ class AppleScriptPrinter:
         return f'application "{node.name}"'
 
     def visit_VariableRef(self, node: VariableRef, indent: int = 0) -> str:
+        if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", node.name):
+            return "|" + node.name + "|"  # e.g. |weird name|
         return node.name
 
     def visit_ElementSpecifier(self, node: ElementSpecifier, indent: int = 0) -> str:
