@@ -27,3 +27,11 @@ applescript_decompiler = ["data/*.sdef"]
 
 [tool.uv.sources]
 jinmo-applescript-disassembler = { path = "jinmo_applescript_disassembler" }
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# run from a checkout without installing either package
+pythonpath = [".", "jinmo_applescript_disassembler"]
