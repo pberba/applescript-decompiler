@@ -86,3 +86,9 @@ A fixture can start with `-- test: xfail <reason>` (known decompiler gap;
 remove the marker once fixed).
 Format new fixtures with AppleScript's own formatter:
 `osacompile -o /tmp/f.scpt f.applescript && osadecompile /tmp/f.scpt > f.applescript`.
+
+### Documentation
+
+- [docs/development.md](docs/development.md): setup and an index to the rest
+  of the docs (how it works, library usage, analyzers, scripting
+  dictionaries, testing)

@@ -32,5 +32,4 @@ root = Loader().load("script.scpt")  # the top-level script object
 ```
 
 The opcode names are in `engine/util.py` (`opcodes`, indexed by opcode
-byte). The decompiler's `docs/file-formats.md` describes the file format and
-the loaded object tree.
+byte).
