@@ -111,6 +111,10 @@ script objects, and its listing no longer goes out of step on opcodes
 with operands. See
 [jinmo_applescript_disassembler/CHANGELOG.md](jinmo_applescript_disassembler/CHANGELOG.md).
 
+The dependency on it is now pinned to the `v2.0.0` tag. It used to follow
+`main`, so an install of any other revision could pair the decompiler with
+a disassembler it doesn't work with.
+
 ## 1.0.2 and earlier
 
 See the `v1.0.1` and `v1.0.2` tags.
