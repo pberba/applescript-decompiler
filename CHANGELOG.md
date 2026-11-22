@@ -57,7 +57,7 @@ bytecode as the original.
   - operators: `div`, `starts with`, `ends with`
   - values: negative and long integers, reals, booleans, records, empty
     lists, `copy x to y`, `a reference to`, stored references,
-    destructuring (`set {a, b} to L`)
+    destructuring (`set {a, b} to L`), raw data (`«data rdat01020304»`)
 - **Terminology:** enumerated values (`rounding as taught in school`) and
   Standard Additions terms (`port`) are named instead of printed as raw
   codes.

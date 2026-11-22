@@ -393,6 +393,9 @@ class AppleScriptPrinter:
     ) -> str:
         return "missing value"
 
+    def visit_RawDataLiteral(self, node: RawDataLiteral, indent: int = 0) -> str:
+        return f"«data {node.type}{node.data.hex().upper()}»"
+
     def visit_AppRef(self, node: AppRef, indent: int = 0) -> str:
         return f'application "{node.name}"'
 
@@ -789,6 +792,13 @@ class MissingValueLiteral(Expression):
 
 
 @dataclass
+class RawDataLiteral(Expression):
+    # `«data rdat01020304»`: a descriptor type and its raw bytes
+    type: str
+    data: bytes
+
+
+@dataclass
 class VariableRef(Expression):
     name: str
 
@@ -1008,6 +1018,8 @@ def convert_literal(lit, target=None):
         return VariableRef(name=lit.decode())
     elif isinstance(lit, rto.String):
         return StringLiteral(value=lit.value.decode("utf-16-be"))
+    elif isinstance(lit, rto.RawData):
+        return RawDataLiteral(type=lit.value[:4].decode("mac_roman"), data=bytes(lit.value[4:]))
     elif isinstance(lit, db.Descriptor):
 
         if lit.content[7] == 2:

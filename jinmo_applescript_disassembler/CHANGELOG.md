@@ -4,7 +4,7 @@
 
 Bug fixes needed by the decompiler (`applescript_decompiler`).
 
-### Loader (`engine/fasobjects`)
+### Loader (`engine`)
 
 - **Scripts with script objects load without "RefID doesn't match"
   errors.** A script object's parent slot points back at its enclosing
@@ -14,6 +14,12 @@ Bug fixes needed by the decompiler (`applescript_decompiler`).
   the script's handlers were lost. The container is now registered first,
   and `TInferiorRefList.doLoad()` (`util.py`) fills the registered list
   in place.
+- **Raw data values load.** A literal such as `«data rdat01020304»`, or
+  any data block that isn't an application alias, crashed: the `@value`
+  decorator (`runtimeobjects.py`) registered itself instead of the class,
+  and there was no class for raw data. Ported from upstream
+  [eea89bc](https://github.com/Jinmo/applescript-disassembler/commit/eea89bc),
+  which also makes an unknown type raise a clear `ValueError`.
 
 ### Disassembler (`disassembler.py`)
 
