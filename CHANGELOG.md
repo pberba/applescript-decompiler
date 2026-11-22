@@ -23,12 +23,13 @@ bytecode as the original.
 
 ### Breaking changes
 
-- **stdout is only the decompiled source.** Diagnostics (handler
-  signatures, properties, warnings, the `-d` trace), the path header and
-  the `-----` separator now go to stderr.
-  `applescript_decompile x.scpt > x.applescript` writes a script that
-  compiles as is. Tooling that split stdout on `-----` should read stdout
-  directly, or call `run_decompiler()`, which now returns the source.
+- **stdout is only the decompiled source.** The header comments (path,
+  handler signatures, properties, the `-----` separator) are hidden by
+  default; `-v`/`--verbose` prints them to stderr. Warnings and the `-d`
+  trace also go to stderr. `applescript_decompile x.scpt > x.applescript`
+  writes a script that compiles as is. Tooling that split stdout on
+  `-----` should read stdout directly, or call `run_decompiler()`, which
+  now returns the source.
 - **`--force` only means "ignore errors".** It used to also make the
   decompiler recurse into script objects; script objects are now always
   decompiled.

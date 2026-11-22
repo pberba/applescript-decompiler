@@ -25,10 +25,11 @@ source = script.to_source()           # -> AppleScript as a string
   scopes, empty for a top-level script.
 - Pass `analyzer=MyAnalyzer` to `to_source()` to post-process the output
   (see [analyzers.md](analyzers.md)).
-- `decompile_script()` prints diagnostics (handler signatures, properties,
-  warnings) to stderr as it runs; `to_source()` returns the reconstructed
-  source. `run_decompiler(tree)` does both steps, prints the source to
-  stdout and returns it.
+- `decompile_script()` prints only warnings (to stderr) as it runs;
+  `to_source()` returns the reconstructed source. `run_decompiler(tree)`
+  does both steps, prints the source to stdout and returns it. To also get
+  the header comments the CLI's `-v` prints (handler signatures,
+  properties), set `applescript_decompiler.decompiler.VERBOSE = True`.
 
 For JavaScript for Automation, there is no bytecode to decompile — read the
 stored source directly:

@@ -79,10 +79,12 @@ New enum members go at the end.
 - `applescript_decompile -d script.scpt` prints the disassembly while
   decompiling. `-c` adds per-instruction comments to the output.
 - `applescript_disassemble script.scpt` prints the disassembler's listing.
-- The decompiled source goes to stdout and diagnostics go to stderr:
-  handler signatures (`-- Function: name(args)`), properties and warnings.
-  `applescript_decompile x.scpt > x.applescript` writes only the source;
-  add `2> diag.txt` to keep the diagnostics.
+- The decompiled source goes to stdout; warnings go to stderr.
+  `-v`/`--verbose` also prints header comments to stderr: the path, each
+  handler's signature (`-- Function: name(args)`) and properties, which
+  show how far decompiling got. `applescript_decompile -v x.scpt >
+  x.applescript` writes only the source; add `2> diag.txt` to keep the
+  diagnostics.
 - To find what a decompiled script gets wrong, recompile it with
   `osacompile -x`. Then compare the two disassemblies handler by handler;
   the first differing instruction is usually the bug.

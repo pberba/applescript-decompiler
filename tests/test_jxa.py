@@ -45,13 +45,14 @@ def test_cli_prints_jxa_source(tmp_path):
     import contextlib
     import io
 
-    buf = io.StringIO()
+    buf, err = io.StringIO(), io.StringIO()
     argv = sys.argv
     sys.argv = ["applescript_decompile", str(out)]
     try:
-        with contextlib.redirect_stdout(buf):
+        with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(err):
             cli()
     finally:
         sys.argv = argv
-    # stdout is exactly the source; the header lines go to stderr
+    # stdout is exactly the source; header comments need -v
     assert buf.getvalue() == src.read_text() + "\n"
+    assert err.getvalue() == ""

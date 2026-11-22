@@ -11,9 +11,20 @@ from applescript_decompiler.jxa import extract_jxa_source, is_jxa, resolve_scrip
 import jinmo_applescript_disassembler.engine.runtimeobjects as rto
 
 
+# Set by the CLI's -v/--verbose (or -d): print the header comments too.
+VERBOSE = False
+
+
 def _diag(*args, **kwargs):
-    """Diagnostics go to stderr; stdout carries only the decompiled source."""
+    """Warnings and the -d trace: always to stderr (stdout is only the source)."""
     print(*args, file=sys.stderr, **kwargs)
+
+
+def _info(*args, **kwargs):
+    """Header comments (path, handler signatures, properties): stderr, only
+    when VERBOSE."""
+    if VERBOSE:
+        _diag(*args, **kwargs)
 
 # Labels of the variables in `on error msg number n from f partial result p to t`
 ERROR_LABELS = {"errn": "number", "erob": "from", "ptlr": "partial result", "errt": "to"}
@@ -46,7 +57,7 @@ def handler_label(name):
 def run_decompiler(f, add_comments=False, force=False, analyzer=None, debug=False):
     """Decompile a loaded script, print the source to stdout and return it."""
     script = decompile_script(f[ROOT_OFFSET], [], add_comments, force, debug)
-    _diag("-----")
+    _info("-----")
     source = script.to_source(analyzer=analyzer)
     print(source)
     return source
@@ -99,12 +110,12 @@ def decompile_script(
             and isinstance(member.value, rto.Constant)
             and number_to_code(member.value.value) == "pimr"
         ):
-            _diag("-- use clauses")
+            _info("-- use clauses")
             uses.extend(use_clauses(function))
             return
 
         if type(function) is not list:
-            _diag("-- <not a function>")
+            _info("-- <not a function>")
             # A script-level value that isn't a handler is a property. Kept
             # in declaration order among the handlers: the order of the
             # script's members is part of the compiled script.
@@ -120,7 +131,7 @@ def decompile_script(
 
         # A script object: [15, name, ?, parent script, script body]
         if function[0] == 15 and len(function) > 4 and isinstance(function[4], list):
-            _diag(f"-- {handler_label(function[NAME_OFFSET + 1])} is a script object")
+            _info(f"-- {handler_label(function[NAME_OFFSET + 1])} is a script object")
             parent = function[3]
             parent_name = None
             if isinstance(parent, list) and len(parent) > 1 and isinstance(parent[1], bytes):
@@ -136,7 +147,7 @@ def decompile_script(
             # not an unknown binding).
             if function_offset - 2 < len(names) and isinstance(names[function_offset - 2], bytes):
                 _prop_name = names[function_offset - 2].decode()
-                _diag(f"-- property {_prop_name}")
+                _info(f"-- property {_prop_name}")
                 handlers.append(
                     PropertyDecl(
                         name=_prop_name,
@@ -144,7 +155,7 @@ def decompile_script(
                     )
                 )
             else:
-                _diag("-- <skipped non-handler value>")
+                _info("-- <skipped non-handler value>")
             return
 
         literals = function[LITERAL_OFFSET + 1]
@@ -155,7 +166,7 @@ def decompile_script(
         if isinstance(args, list) and len(args) >= 3 and isinstance(args[2], list):
             _args = args[2][1:]
         _arg_names = ", ".join(a.decode() if isinstance(a, bytes) else str(a) for a in _args)
-        _diag(f"-- Function: {handler_label(name)}({_arg_names})")
+        _info(f"-- Function: {handler_label(name)}({_arg_names})")
 
         _labeled = []
         _binding = function[LABELED_OFFSET + 1]
@@ -1055,7 +1066,9 @@ def use_clauses(value):
 
 
 def cli():
+    global VERBOSE
     args = parse_args()
+    VERBOSE = args.verbose or args.debug
 
     path = args.scpt
     add_comments = args.comments
@@ -1072,14 +1085,14 @@ def cli():
 
     if is_jxa(path):
         # JavaScript for Automation: the source is stored as text
-        _diag(f'// {path}')
-        _diag('// JavaScript for Automation (JXA): source stored in the script, not compiled')
-        _diag('-----')
+        _info(f'// {path}')
+        _info('// JavaScript for Automation (JXA): source stored in the script, not compiled')
+        _info('-----')
         print(extract_jxa_source(path))
         return
 
-    _diag(f'-- {path}')
-    _diag('--')
+    _info(f'-- {path}')
+    _info('--')
     f = Loader()
     f = f.load(resolve_script_path(path))
     run_decompiler(f, add_comments=args.comments, force=args.force, analyzer=analyzer, debug=args.debug)
@@ -1110,7 +1123,13 @@ def parse_args():
         "-d",
         "--debug",
         action="store_true",
-        help="Prints out the disassembled code while decompiling",
+        help="Prints out the disassembled code while decompiling (implies -v)",
+    )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Print header comments (path, handler signatures, properties) to stderr",
     )
     parser.add_argument(
         "--analyzer",

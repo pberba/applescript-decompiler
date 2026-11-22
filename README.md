@@ -25,7 +25,7 @@ uv run sync
 #### Decompiler
 
 ```shell
-usage: applescript_decompile [-h] [-c] [-f] [-d] [--analyzer ANALYZER] scpt
+usage: applescript_decompile [-h] [-c] [-f] [-d] [-v] [--analyzer ANALYZER] scpt
 
 AppleScript .scpt decompiler (also extracts the source of JXA scripts)
 
@@ -36,7 +36,8 @@ options:
   -h, --help           show this help message and exit
   -c, --comments       Include comments in the decompiled output
   -f, --force          Ignore errors and keep decompiling the remaining handlers
-  -d, --debug          Prints out the disassembled code while decompiling
+  -d, --debug          Prints out the disassembled code while decompiling (implies -v)
+  -v, --verbose        Print header comments (path, handler signatures, properties) to stderr
   --analyzer ANALYZER  Dotted path to analyzer class like applescript_decompiler.OSAMinerDecryptAnalyzer, applescript_decompiler.NaiveStringAnalyzer, or local.MyAnalyzer (for a file in local.py)
 
 ```
