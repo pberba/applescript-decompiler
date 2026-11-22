@@ -2,7 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import List, Optional, Union, Dict, Any
-import json
+import re
 
 import warnings
 
@@ -12,11 +12,42 @@ import jinmo_applescript_disassembler.engine.fasobjects.data_block as db
 from applescript_decompiler.utils import *
 
 EVENT_CODES = get_event_code_mapping()
-SDEFS = load_sdefs_from_package()
+SDEFS, ENUMERATORS = load_package_sdefs()
+# Standard Additions classes/properties/enumerations (not command
+# parameters, whose codes mean something only for their command)
+STANDARD_ADDITIONS_TERMS = {}
+for _i in range(0, len(DATA) - 3, 4):
+    if DATA[_i + 3].startswith("Standard Additions") and not DATA[_i + 2].startswith(
+        ("Parameter", "Command")
+    ):
+        STANDARD_ADDITIONS_TERMS.setdefault(DATA[_i].strip("'"), DATA[_i + 1])
+
+# considering/ignoring attributes, stored as 'cons' + attribute code
+CONSIDERATIONS = {
+    "conscase": "case",
+    "consdiac": "diacriticals",
+    "conshyph": "hyphens",
+    "conspunc": "punctuation",
+    "conswhit": "white space",
+    "consexpa": "expansion",
+    "consnume": "numeric strings",
+    "consrmte": "application responses",
+}
 
 INDENT_STR = "    "  # 4 spaces
 DEFAULT_TARGET = "AppleScript Language"
 STANDARD_ADDITIONS = "StandardAdditions"
+# single-word AppleScript terms; a handler called with one of these names
+# (e.g. an ObjC method `length`) has to be written |length|
+AS_TERMS = {n for n in EVENT_CODES[DEFAULT_TARGET].values() if n.isidentifier()}
+
+
+def identifier(name):
+    """`name` as a user identifier: barred if it isn't a plain one or is a
+    term, e.g. |weird name|, or |name| (not the keyword)."""
+    if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", name) or name in AS_TERMS:
+        return "|" + name + "|"
+    return name
 
 
 class AppleScriptPrinter:
@@ -76,8 +107,10 @@ class AppleScriptPrinter:
 
     def visit_Handler(self, node: Handler, indent: int = 0) -> str:
         params = ""
-        if node.parameters:
-            params = "(" + ", ".join(node.parameters) + ")"
+        if node.parameters or not isinstance(node.name, rto.Object):
+            # user handlers need `()` even without parameters;
+            # event handlers (`on run`) don't
+            params = "(" + ", ".join(identifier(p) for p in node.parameters) + ")"
 
         _node_name = node.name
 
@@ -90,6 +123,13 @@ class AppleScriptPrinter:
                 _node_name = val.identifier[0].to_bytes(4, "big").decode(
                     "ascii"
                 ) + val.identifier[1].to_bytes(4, "big").decode("ascii")
+        else:
+            _node_name = identifier(_node_name)
+
+        if node.labeled:
+            params = " given " + ", ".join(
+                f"{self.visit(label, 0)}:{identifier(var)}" for label, var in node.labeled
+            )
 
         header = f"{self._i(indent)}on {_node_name}{params}"
 
@@ -109,13 +149,27 @@ class AppleScriptPrinter:
         target_src = ""
         if node.target is not None:
             target_src = self.visit(node.target, 0)
-            if target_src != "my":
+            if target_src == "me":
+                target_src = "my"
+            else:
                 target_src = target_src + "'s"
             target_src = target_src + " "
-        return f"{self._i(indent)}{target_src}{node.handler_name}({args_src})"
+        if node.labeled:
+            given = ", ".join(
+                f"{self.visit(label, 0)}:{self.visit(value, 0)}" for label, value in node.labeled
+            )
+            # parenthesised: as an argument (`log (f given x:1)`), `given`
+            # would otherwise bind to the enclosing command
+            return f"{self._i(indent)}({target_src}{node.handler_name} given {given})"
+        _name = node.handler_name
+        if _name in AS_TERMS:
+            _name = f"|{_name}|"
+        return f"{self._i(indent)}{target_src}{_name}({args_src})"
 
     def visit_SetStatement(self, node: SetStatement, indent: int = 0) -> str:
         target_src = self.visit(node.target, 0)
+        if isinstance(node.value, Copied):
+            return f"{self._i(indent)}copy {self.visit(node.value.value, 0)} to {target_src}"
         value_src = self.visit(node.value, 0)
         return f"{self._i(indent)}set {target_src} to {value_src}"
 
@@ -202,11 +256,49 @@ class AppleScriptPrinter:
             footer = f"{self._i(indent)}end try"
             return f"{header}\n{try_block}\n{footer}"
 
+    def visit_TimeoutBlock(self, node: TimeoutBlock, indent: int = 0) -> str:
+        body_lines = [self.visit(stmt, indent + 1) for stmt in node.body]
+        return "\n".join(
+            [f"{self._i(indent)}with timeout of {self.visit(node.timeout, 0)} seconds"]
+            + body_lines
+            + [f"{self._i(indent)}end timeout"]
+        )
+
+    def visit_ConsideringBlock(self, node: ConsideringBlock, indent: int = 0) -> str:
+        cons = ", ".join(self.visit(a, 0) for a in node.considering)
+        ign = ", ".join(self.visit(a, 0) for a in node.ignoring)
+        if cons:
+            header = f"considering {cons}" + (f" but ignoring {ign}" if ign else "")
+            footer = "end considering"
+        else:
+            header, footer = f"ignoring {ign}", "end ignoring"
+        body_lines = [self.visit(stmt, indent + 1) for stmt in node.body]
+        return "\n".join(
+            [f"{self._i(indent)}{header}"] + body_lines + [f"{self._i(indent)}{footer}"]
+        )
+
+    def visit_UseStatement(self, node: UseStatement, indent: int = 0) -> str:
+        return f"{self._i(indent)}use {node.text}"
+
+    def visit_EmptyStatement(self, node: EmptyStatement, indent: int = 0) -> str:
+        return ""
+
+    def visit_ScriptBlock(self, node: ScriptBlock, indent: int = 0) -> str:
+        lines = [f"{self._i(indent)}script {node.name}"]
+        if node.parent:
+            lines.append(f"{self._i(indent + 1)}property parent : {node.parent}")
+        body = self.visit(node.script, indent + 1)
+        if body:
+            lines.append(body)
+        lines.append(f"{self._i(indent)}end script")
+        return "\n".join(lines)
+
     def visit_TellBlock(self, node: TellBlock, indent: int = 0) -> str:
         target_src = self.visit(node.target, 0)
 
         prev_target = self.target
-        self.target = target_src
+        # terminology lookups are keyed by application name
+        self.target = node.target.name if isinstance(node.target, AppRef) else target_src
 
         header = f"{self._i(indent)}tell {target_src}"
         body_lines = [self.visit(stmt, indent + 1) for stmt in node.body]
@@ -234,16 +326,37 @@ class AppleScriptPrinter:
         return self.visit(node.obj)
 
     def visit_StringLiteral(self, node: StringLiteral, indent: int = 0) -> str:
-        # naive quoting; you may want to escape quotes
-        return json.dumps(node.value)
+        # AppleScript only knows the escapes \" \\ \n \t \r; any other
+        # character (e.g. "…") is written as is. Other control characters
+        # can't appear in a literal, so splice them in with `character id`.
+        escapes = {"\\": "\\\\", '"': '\\"', "\n": "\\n", "\t": "\\t", "\r": "\\r"}
+        parts, current = [], ""
+        for ch in node.value:
+            if ch in escapes:
+                current += escapes[ch]
+            elif ord(ch) < 0x20 or ord(ch) == 0x7F:
+                parts.append(f'"{current}"')
+                parts.append(f"(character id {ord(ch)})")
+                current = ""
+            else:
+                current += ch
+        if not parts:
+            return f'"{current}"'
+        parts.append(f'"{current}"')
+        return "(" + " & ".join(parts) + ")"
 
     def visit_Keyword(self, node: Keyword, indent: int = 0) -> str:
         # naive quoting; you may want to escape quotes
+        if node.value in CONSIDERATIONS:
+            return CONSIDERATIONS[node.value]
+        if node.value == "lnfd":  # missing from the terminology table
+            return "linefeed"
 
-        if self.command != "None" and node.value in SDEFS[self.target][self.command]:
-            params = SDEFS[self.target][node.command_name]["name"]
+        if self.command != "None":
+            # a parameter label of the command being printed (`make new ... at`)
+            params = SDEFS[self.target].get(self.command, {}).get("parameters", {})
             if node.value in params:
-                return params[node.value]["name"]
+                return params[node.value]
 
         if node.value in SDEFS[STANDARD_ADDITIONS]:
             return f"{SDEFS[STANDARD_ADDITIONS][node.value]['name']}"
@@ -257,6 +370,13 @@ class AppleScriptPrinter:
             and node.value[4:] in EVENT_CODES[DEFAULT_TARGET]
         ):
             return f"{EVENT_CODES[DEFAULT_TARGET][node.value[4:]]}"
+        if node.value in STANDARD_ADDITIONS_TERMS:  # e.g. 'ppor' port
+            return STANDARD_ADDITIONS_TERMS[node.value]
+        # enumerated values: 'rndS', or 'olierndS' (enumeration + enumerator)
+        if node.value in ENUMERATORS:
+            return ENUMERATORS[node.value]
+        if len(node.value) == 8 and node.value[4:] in ENUMERATORS:
+            return ENUMERATORS[node.value[4:]]
         return f"{node.value}"
 
     def visit_NumberLiteral(self, node: NumberLiteral, indent: int = 0) -> str:
@@ -273,8 +393,16 @@ class AppleScriptPrinter:
     ) -> str:
         return "missing value"
 
+    def visit_RawDataLiteral(self, node: RawDataLiteral, indent: int = 0) -> str:
+        return f"«data {node.type}{node.data.hex().upper()}»"
+
+    def visit_AppRef(self, node: AppRef, indent: int = 0) -> str:
+        return f'application "{node.name}"'
+
     def visit_VariableRef(self, node: VariableRef, indent: int = 0) -> str:
-        return node.name
+        if node.name == "my":
+            return "me"  # PushMe; possessive uses print `my` themselves
+        return identifier(node.name)
 
     def visit_ElementSpecifier(self, node: ElementSpecifier, indent: int = 0) -> str:
         container = self.visit(node.container, 0)
@@ -309,21 +437,47 @@ class AppleScriptPrinter:
             return f"({left} as {right})"
         elif node.op is BinaryOpKind.THRU:
             # alternatively f"{left}'s {right}"
+            if _is_operator(node.left):
+                left = f"({left})"
+            if _is_operator(node.right):
+                right = f"({right})"
             return f"{left} thru {right}"
         elif node.op is BinaryOpKind.GET_INDEXED:
             # alternatively f"{left}'s {right}"
-            if right == "__it__" or right == "my":
+            if right == "__it__" or right == "me":
                 return left
             return f"{left} {right}"
         elif node.op is BinaryOpKind.GET_PROPERTY:
             # alternatively f"{left}'s {right}"
-            if right == "__it__" or right == "my":
+            if right == "me":
+                return f"my {left}"  # `a` alone would compile differently
+            if right == "__it__":
+                if type(node.left) is VariableRef:
+                    return f"its {left}"  # a user property of `it`
                 return left
+            if (isinstance(node.right, BinaryOp) and node.right.op is BinaryOpKind.WHOSE) or _is_operator(
+                node.right
+            ):
+                right = f"({right})"  # item 1 of (every disk whose ...), text of (a & b)
             return f"({left} of {right})"
+        elif node.op is BinaryOpKind.WHOSE:
+            return f"{left} whose {right}"
+        elif node.op in (BinaryOpKind.BY_ID, BinaryOpKind.BY_NAME):
+            if _is_operator(node.right):
+                right = f"({right})"
+            return f"{left} {'id' if node.op is BinaryOpKind.BY_ID else 'named'} {right}"
+        elif node.op in (BinaryOpKind.BEFORE, BinaryOpKind.AFTER):
+            return f"{left} {'before' if node.op is BinaryOpKind.BEFORE else 'after'} ({right})"
         elif node.op is BinaryOpKind.EVERY:
             if left == "__it__":
                 return f" every {right}"
             return f"(every {right} of {left})"
+        # Parenthesise operands that are themselves operators, otherwise
+        # precedence changes the meaning (`(a + b) * c`).
+        if _is_operator(node.left):
+            left = f"({left})"
+        if _is_operator(node.right):
+            right = f"({right})"
         return f"{left} {op} {right}"
 
     def _binop_to_src(self, op: BinaryOpKind) -> str:
@@ -342,6 +496,9 @@ class AppleScriptPrinter:
             BinaryOpKind.GT: ">",
             BinaryOpKind.GE: "≥",
             BinaryOpKind.CONTAINS: "contains",
+            BinaryOpKind.QUOTIENT: "div",
+            BinaryOpKind.STARTS_WITH: "starts with",
+            BinaryOpKind.ENDS_WITH: "ends with",
             BinaryOpKind.COERCE: "as",  # handled specially
             BinaryOpKind.GET_PROPERTY: "'s",  # handled specially
             BinaryOpKind.GET_INDEXED: "_",    # handled specially
@@ -356,16 +513,31 @@ class AppleScriptPrinter:
             return f"-({operand})"
         elif node.op is UnaryOpKind.NOT:
             return f"not ({operand})"
+        elif node.op is UnaryOpKind.BEGINNING_OF:
+            return f"beginning of ({operand})"
         elif node.op is UnaryOpKind.END_OF:
             return f"end of ({operand})"
+        elif node.op is UnaryOpKind.REFERENCE_TO:
+            return f"a reference to ({operand})"
+        elif node.op is UnaryOpKind.MIDDLE:
+            return f"middle {operand}"
+        elif node.op is UnaryOpKind.SOME:
+            return f"some {operand}"
         return operand
+
+    def visit_Copied(self, node: Copied, indent: int = 0) -> str:
+        return self.visit(node.value, 0)
 
     def visit_CommandCall(self, node: CommandCall, indent: int = 0) -> str:
         prev_command = self.command
         prev_target = self.target
 
+        # an application name (e.g. "System Events"), used as is
+        _target_name = (
+            node.target.name if type(node.target) is VariableRef else self.visit(node.target, 0)
+        )
         if node.target is not None:
-            self.target = self.visit(node.target, 0)
+            self.target = _target_name
 
         _command_name = node.command_name
         if node.command_name in SDEFS[self.target]:
@@ -384,12 +556,32 @@ class AppleScriptPrinter:
         args_str = " ".join([e if isinstance(e, str) else e.decode() for e in args_src])
         target_prefix = ""
         if node.target is not None:
-            target_prefix = f"tell application \"{self.visit(node.target, 0)}\" "
+            target_prefix = f"tell application \"{_target_name}\" "
 
         self.command = prev_command
         self.target = prev_target
 
+        if node.command_name == "error":
+            # `error` is a statement, not an expression: no parentheses
+            return f"{self._i(indent)}{target_prefix}{_command_name} {args_str}"
         return f"{self._i(indent)}({target_prefix}{_command_name} {args_str})"
+
+
+def _is_operator(node) -> bool:
+    if isinstance(node, UnaryOp):
+        return node.op in (UnaryOpKind.NEG, UnaryOpKind.NOT)
+    return isinstance(node, BinaryOp) and node.op not in (
+        BinaryOpKind.COERCE,  # already parenthesised
+        BinaryOpKind.GET_PROPERTY,
+        BinaryOpKind.GET_INDEXED,
+        BinaryOpKind.EVERY,
+        BinaryOpKind.THRU,
+        BinaryOpKind.WHOSE,
+        BinaryOpKind.BY_ID,
+        BinaryOpKind.BY_NAME,
+        BinaryOpKind.BEFORE,
+        BinaryOpKind.AFTER,
+    )
 
 
 @dataclass
@@ -442,6 +634,8 @@ class Handler(Node):
     name: str
     parameters: List[str] = field(default_factory=list)
     body: List[Statement] = field(default_factory=list)
+    # `on greet given name:n` -> [(label, "n")]
+    labeled: List[Any] = field(default_factory=list)
 
 
 @dataclass
@@ -449,6 +643,8 @@ class HandlerCall(Expression):
     handler_name: str
     arguments: List[Expression]
     target: Optional[Expression] = None  # `my` or some script object
+    # `greet given name:"bob"` -> [(label, value)]
+    labeled: List[Any] = field(default_factory=list)
 
 
 @dataclass
@@ -521,6 +717,40 @@ class TellBlock(Statement):
 
 
 @dataclass
+class UseStatement(Statement):
+    # `use framework "Foundation"`, `use scripting additions`, ...
+    text: str
+
+
+@dataclass
+class EmptyStatement(Statement):
+    # a blank line; compiles to StoreResult; GetResult after a block
+    pass
+
+
+@dataclass
+class ScriptBlock(Statement):
+    # `script Name` ... `end script`
+    name: str
+    script: Script
+    parent: Optional[str] = None  # `property parent : Base`
+
+
+@dataclass
+class TimeoutBlock(TellBlock):
+    # `with timeout of N seconds` ... `end timeout`; `target` is unused
+    timeout: Optional[Expression] = None
+
+
+@dataclass
+class ConsideringBlock(TellBlock):
+    # `considering case but ignoring white space` ... `end considering`.
+    # Shares TellBlock's handling in the decompiler; `target` is unused.
+    considering: List[Expression] = field(default_factory=list)
+    ignoring: List[Expression] = field(default_factory=list)
+
+
+@dataclass
 class ReturnStatement(Statement):
     value: Optional[Expression] = None  # `return` or `return expr`
 
@@ -562,8 +792,21 @@ class MissingValueLiteral(Expression):
 
 
 @dataclass
+class RawDataLiteral(Expression):
+    # `«data rdat01020304»`: a descriptor type and its raw bytes
+    type: str
+    data: bytes
+
+
+@dataclass
 class VariableRef(Expression):
     name: str
+
+
+@dataclass
+class AppRef(VariableRef):
+    # an application alias literal, e.g. `application "Finder"`
+    pass
 
 
 @dataclass
@@ -612,6 +855,16 @@ class BinaryOpKind(Enum):
     AND = auto()
     OR = auto()
 
+    # added later; kept at the end so existing values don't change
+    QUOTIENT = auto()  # div
+    STARTS_WITH = auto()
+    ENDS_WITH = auto()
+    WHOSE = auto()  # X whose Y
+    BY_ID = auto()  # window id 5
+    BY_NAME = auto()  # file named "x"
+    BEFORE = auto()  # item before X
+    AFTER = auto()  # item after X
+
 
 BINARY_OP_MAPPING = {
     "Subtract": BinaryOpKind.SUB,
@@ -629,6 +882,9 @@ BINARY_OP_MAPPING = {
     "GreaterThanOrEqual": BinaryOpKind.GE,
     "Coerce": BinaryOpKind.COERCE,
     "Contains": BinaryOpKind.CONTAINS,
+    "Quotient": BinaryOpKind.QUOTIENT,
+    "StartsWith": BinaryOpKind.STARTS_WITH,
+    "EndsWith": BinaryOpKind.ENDS_WITH,
     # 'And'                 : BinaryOpKind.AND,
     # 'Or'                  : BinaryOpKind.OR,
 }
@@ -659,9 +915,19 @@ class UnaryOpKind(Enum):
     NEG = auto()  # -x
     NOT = auto()  # not x
     END_OF = auto()
+    BEGINNING_OF = auto()
+    REFERENCE_TO = auto()  # a reference to X
+    MIDDLE = auto()  # middle <class>, as in `middle item of L`
+    SOME = auto()  # some <class>
 
 
 UNARY_OP_MAPPING = {"Negate": UnaryOpKind.NEG, "Not": UnaryOpKind.NOT}
+
+
+@dataclass
+class Copied(Expression):
+    # value produced by Clone: `copy x to y` instead of `set y to x`
+    value: Expression
 
 
 @dataclass
@@ -683,19 +949,77 @@ def number_to_code(num):
     return num.to_bytes(num_bytes, "big").decode("ascii")
 
 
+def convert_reference(spec):
+    """A stored object specifier: [form, container, class/property, key...]."""
+    if not (isinstance(spec, list) and len(spec) >= 3):
+        return convert_literal(spec)
+    form, cont = spec[0], spec[1]
+    if isinstance(cont, list) and cont and cont[0] == 15:
+        container = VariableRef(name="__it__")  # the script itself
+    elif isinstance(cont, list):
+        container = convert_reference(cont)
+    else:
+        container = convert_literal(cont)
+    if form == 21:  # property
+        return BinaryOp(op=BinaryOpKind.GET_PROPERTY, left=convert_literal(spec[2]), right=container)
+    if form == 22:  # every
+        return BinaryOp(op=BinaryOpKind.EVERY, left=container, right=convert_literal(spec[2]))
+    if form == 24 and len(spec) >= 4:  # indexed / named
+        indexed = BinaryOp(
+            op=BinaryOpKind.GET_INDEXED, left=convert_literal(spec[2]), right=convert_literal(spec[3])
+        )
+        return BinaryOp(op=BinaryOpKind.GET_PROPERTY, left=indexed, right=container)
+    return VariableRef(name="__unknown_reference__")
+
+
 def convert_literal(lit, target=None):
+    if isinstance(lit, list) and lit == [19]:
+        # the object being tested in a `whose` clause; behaves like `it`
+        return VariableRef(name="__it__")
+    if isinstance(lit, rto.Pair):  # list constant, e.g. considering attributes
+        elements = []
+        while isinstance(lit, rto.Pair) and not isinstance(lit, rto.EmptyPair):
+            elements.append(convert_literal(lit.first))
+            lit = lit.second
+        return ListLiteral(elements=elements)
+    if isinstance(lit, list) and len(lit) == 2 and lit[0] == 20 and isinstance(lit[1], list):
+        # stored reference, e.g. `property P : a reference to current application's NSString`
+        return UnaryOp(op=UnaryOpKind.REFERENCE_TO, operand=convert_reference(lit[1]))
+    if isinstance(lit, list) and len(lit) == 3 and lit[0] == 4 and isinstance(lit[2], list):
+        # list value: [4, count, [?, item, item, ...]]
+        return ListLiteral(elements=[convert_literal(e) for e in lit[2][1:]])
+    if isinstance(lit, list) and len(lit) == 3 and lit[0] == 4 and lit[1] == rto.Fixnum(0):
+        return ListLiteral(elements=[])  # empty list value: [4, 0, nil]
+    if isinstance(lit, rto.Binding):  # record value: chain of label/value bindings
+        fields = []
+        while isinstance(lit, rto.Binding):
+            fields.append(RecordField(label=convert_literal(lit.a), value=convert_literal(lit.b)))
+            lit = lit.next
+        return RecordLiteral(fields=fields)
+    if isinstance(lit, float):
+        return NumberLiteral(value=lit)
+    if isinstance(lit, int):
+        return NumberLiteral(value=lit)  # integers too large for a Fixnum
     if isinstance(lit, list):
         lit = lit[1]
     if isinstance(lit, rto.Object):
         lit = lit.value
     if isinstance(lit, rto.Constant):
-        return Keyword(value=number_to_code(lit.value))
+        code = number_to_code(lit.value)
+        if code in ("boovtrue", "boovfals"):  # booleans stored as constants
+            return BooleanLiteral(value=code == "boovtrue")
+        return Keyword(value=code)
     elif isinstance(lit, rto.Fixnum):
-        return NumberLiteral(value=lit.value)
+        # small integers are stored as 16 bits: 0xfffd is -3
+        v = lit.value
+        return NumberLiteral(value=v - 0x10000 if 0x8000 <= v <= 0xFFFF else v)
     elif isinstance(lit, bytes):
-        return StringLiteral(value=lit.decode())
+        # bytes are identifiers (record labels, property names), not strings
+        return VariableRef(name=lit.decode())
     elif isinstance(lit, rto.String):
         return StringLiteral(value=lit.value.decode("utf-16-be"))
+    elif isinstance(lit, rto.RawData):
+        return RawDataLiteral(type=lit.value[:4].decode("mac_roman"), data=bytes(lit.value[4:]))
     elif isinstance(lit, db.Descriptor):
 
         if lit.content[7] == 2:
@@ -704,4 +1028,4 @@ def convert_literal(lit, target=None):
             app_name = lit.content[51:].split(b".app")[0].decode(errors="ignore")
         else:
             app_name = lit.content.split(b".app/")[0].split(b":")[-1].decode()
-        return VariableRef(name=app_name)
+        return AppRef(name=app_name)

@@ -25,21 +25,32 @@ uv run sync
 #### Decompiler
 
 ```shell
-usage: applescript_decompile [-h] [-c] [-f] [-d] [--analyzer ANALYZER] scpt
+usage: applescript_decompile [-h] [-c] [-f] [-d] [-v] [--analyzer ANALYZER] scpt
 
-AppleScript .scpt decompiler
+AppleScript .scpt decompiler (also extracts the source of JXA scripts)
 
 positional arguments:
-  scpt                 Path to a compiled AppleScript .scpt file
+  scpt                 Path to a compiled .scpt file (AppleScript or JXA), or a .scptd/.app bundle
 
 options:
   -h, --help           show this help message and exit
   -c, --comments       Include comments in the decompiled output
-  -f, --force          Recursively traverse to find handlers to force handlers to come out and ignore errors
-  -d, --debug          Prints out the disassembled code while decompiling
+  -f, --force          Ignore errors and keep decompiling the remaining handlers
+  -d, --debug          Prints out the disassembled code while decompiling (implies -v)
+  -v, --verbose        Print header comments (path, handler signatures, properties) to stderr
   --analyzer ANALYZER  Dotted path to analyzer class like applescript_decompiler.OSAMinerDecryptAnalyzer, applescript_decompiler.NaiveStringAnalyzer, or local.MyAnalyzer (for a file in local.py)
 
 ```
+
+#### JXA
+
+A compiled JavaScript for Automation script (`osacompile -l JavaScript`, even
+with `-x`) is not bytecode: the file stores the original JavaScript source as
+text. Nothing needs to be decompiled, so the tool reads the source directly
+from the file and prints it as is. The AppleScript options (`--analyzer`,
+`--comments`, `--force`, `--debug`) don't apply to JXA scripts. `.scptd` and
+`.app` bundles are accepted for both languages (the script is
+`Contents/Resources/Scripts/main.scpt`).
 
 #### Demo
 
@@ -59,3 +70,26 @@ Decompile output
 applescript_decompile demo/demo_runonly.scpt > demo/demo_output.out
 ```
 
+
+### Tests
+
+The tests need macOS (`osacompile`). Each script in `tests/fixtures` is
+compiled run-only and decompiled; the decompiled source, recompiled run-only,
+must produce the same bytecode, literals and names as the original (comments,
+formatting and parentheses don't matter). Nothing is executed, so fixtures may
+have side effects.
+
+```
+uv run --with pytest pytest
+```
+
+A fixture can start with `-- test: xfail <reason>` (known decompiler gap;
+remove the marker once fixed).
+Format new fixtures with AppleScript's own formatter:
+`osacompile -o /tmp/f.scpt f.applescript && osadecompile /tmp/f.scpt > f.applescript`.
+
+### Documentation
+
+- [docs/development.md](docs/development.md): setup and an index to the rest
+  of the docs (how it works, library usage, analyzers, scripting
+  dictionaries, testing)

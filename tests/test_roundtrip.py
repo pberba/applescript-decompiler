@@ -1,0 +1,168 @@
+"""Round-trip tests for the run-only decompiler (macOS only).
+
+For every fixture in tests/fixtures:
+
+1. compile it run-only (`osacompile -x`) and decompile it;
+2. **bytecode equivalence**: recompile the decompiled source run-only and
+   compare both scripts handler by handler (code bytes, literals, local
+   names, parameters, properties). The compiler does the normalising, so
+   comments, whitespace, parentheses and equivalent spellings don't matter,
+   while a wrong operator, a lost statement or a renamed variable does.
+
+Nothing is executed, so fixtures may have side effects.
+
+The e2e_* fixtures are larger, realistic scripts (AppleScriptObjC, nested
+script objects, closures, error handling); their run-only builds are kept
+next to them as .scpt files for manual use.
+
+A fixture can start with a marker line:
+  -- test: xfail <reason>   known decompiler gap (strict: remove the marker
+                            once the gap is fixed).
+"""
+
+import contextlib
+import io
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+
+pytestmark = pytest.mark.skipif(sys.platform != "darwin", reason="needs osacompile")
+
+import jinmo_applescript_disassembler.engine.runtimeobjects as rto  # noqa: E402
+from jinmo_applescript_disassembler.engine.fasobjects.data_block import Descriptor  # noqa: E402
+from jinmo_applescript_disassembler.engine.fasparser import Loader  # noqa: E402
+
+from applescript_decompiler.decompiler import run_decompiler  # noqa: E402
+
+FIXTURES = sorted((Path(__file__).parent / "fixtures").glob("*.applescript"))
+
+
+def markers(src: Path) -> dict:
+    found = {}
+    for line in src.read_text().splitlines():
+        if not line.startswith("-- test: "):
+            break
+        key, _, reason = line[len("-- test: "):].partition(" ")
+        found[key] = reason
+    return found
+
+
+def cases():
+    out = []
+    for src in FIXTURES:
+        m = markers(src)
+        marks = [pytest.mark.xfail(reason=m["xfail"], strict=True)] if "xfail" in m else []
+        out.append(pytest.param(src, id=src.stem, marks=marks))
+    return out
+
+
+def osacompile_runonly(src: Path, out: Path) -> Path:
+    r = subprocess.run(["osacompile", "-x", "-o", str(out), str(src)], capture_output=True, text=True)
+    assert r.returncode == 0, f"osacompile failed for {src.name}:\n{r.stderr}"
+    return out
+
+
+def decompile(scpt: Path) -> str:
+    with contextlib.redirect_stdout(io.StringIO()):
+        return run_decompiler(Loader().load(str(scpt)))
+
+
+# ---- canonical form of a loaded script ---------------------------------
+
+
+def is_handler(v):
+    return isinstance(v, list) and len(v) >= 8 and v[0] in (16, 17) and hasattr(v[7], "value")
+
+
+def is_actor(v):
+    return isinstance(v, list) and len(v) > 4 and v[0] == 15 and isinstance(v[4], list)
+
+
+def canon(v, depth=0):
+    """A comparable, acyclic representation of a loaded value."""
+    if depth > 12:
+        return "..."
+    if is_handler(v):
+        return canon_handler(v, depth + 1)
+    if is_actor(v):
+        # name, parent's name and body; the parent pointer itself is cyclic
+        parent = v[3][1] if is_actor(v[3]) else None
+        return ("script", canon(v[1]), canon(parent), canon_body(v[4], depth + 1))
+    if isinstance(v, list):
+        return tuple(canon(x, depth + 1) for x in v)
+    if isinstance(v, rto.Statement):
+        return "<syntax tree>"  # leftover tree stubs; not part of the program
+    if isinstance(v, rto.Binding):
+        return ("binding", canon(v.a, depth + 1), canon(v.b, depth + 1), canon(v.next, depth + 1))
+    if isinstance(v, rto.EmptyPair):
+        return ("pair",)
+    if isinstance(v, rto.Pair):
+        return ("pair", canon(v.first, depth + 1), canon(v.second, depth + 1))
+    if isinstance(v, Descriptor):
+        return ("descriptor", v.type, v.content)
+    if isinstance(v, (rto.Value, rto.Reference)):
+        return repr(v)
+    return v
+
+
+def canon_handler(fn, depth=0):
+    return {
+        "name": canon(fn[1], depth),
+        "positional": canon(fn[3], depth),
+        "labeled": canon(fn[4], depth),
+        "locals": canon(fn[5], depth),
+        "literals": canon(fn[6], depth),
+        "code": bytes(bytearray(fn[7].value)),
+    }
+
+
+def canon_body(body, depth=0):
+    """A script body: [outer scope, names, value 0, value 1, ...]."""
+    names = canon(body[1], depth)
+    return {"names": names, "values": [canon(v, depth) for v in body[2:]]}
+
+
+def canonical_script(scpt: Path):
+    return canon_body(Loader().load(str(scpt))[-1])
+
+
+# ---- the tests -----------------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def roundtrip(tmp_path_factory):
+    """Decompile each fixture once; returns paths of the intermediate files."""
+    cache = {}
+
+    def get(src: Path):
+        if src not in cache:
+            d = tmp_path_factory.mktemp(src.stem)
+            original = osacompile_runonly(src, d / "original.scpt")
+            decompiled = d / "decompiled.applescript"
+            decompiled.write_text(decompile(original))
+            cache[src] = (original, decompiled, d)
+        return cache[src]
+
+    return get
+
+
+@pytest.mark.parametrize("src", cases())
+def test_bytecode_equivalent(src, roundtrip):
+    original, decompiled, d = roundtrip(src)
+    r = subprocess.run(
+        ["osacompile", "-x", "-o", str(d / "recompiled.scpt"), str(decompiled)],
+        capture_output=True,
+        text=True,
+    )
+    assert r.returncode == 0, f"decompiled source does not compile:\n{r.stderr}\n{decompiled.read_text()}"
+    assert canonical_script(d / "recompiled.scpt") == canonical_script(original), decompiled.read_text()
+
+
+def test_bytecode_equivalent_long_raw_data(tmp_path, roundtrip):
+    """Raw data over 64 KB is stored as a long data block (object type 18).
+    Generated here rather than committed as a 130 KB fixture."""
+    src = tmp_path / "long_raw_data.applescript"
+    src.write_text("set x to «data rdat" + "41" * 70000 + "»\nreturn x\n")
+    test_bytecode_equivalent(src, roundtrip)

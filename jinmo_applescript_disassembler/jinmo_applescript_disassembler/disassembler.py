@@ -60,6 +60,7 @@ def main():
             return r - 0x10000 if r & 0x8000 else r
 
         def literal(x):
+            x &= 0xFFFF  # literal indices are unsigned (word() sign-extends)
             if x >= len(literals):
                 return '[L%d]' % x
             return literals[x]
@@ -77,8 +78,9 @@ def main():
             op = opcodes[c]
             print(op, end=' ')
             # print ops for each instruction
+            # Branch targets are relative to the byte after the opcode.
             if op == 'Jump':
-                print(hex(state['pos'] + word()), end=' ')
+                print(hex(_curr_pos + 1 + word()), end=' ')
             elif op == 'PushLiteral':
                 print(c & 0xf, '#', literal(c & 0xf), end=' ')
             elif op == 'PushLiteralExtended':
@@ -151,7 +153,7 @@ def main():
             elif op == 'Dup':
                 pass
             elif op in ('TestIf', 'And', 'Or'):
-                print(hex(state['pos'] + word()), end=' ')
+                print(hex(_curr_pos + 1 + word()), end=' ')
             elif op == 'MessageSend':
                 v = word()
                 print(v, '#', literal(v), end=' ')
@@ -166,8 +168,15 @@ def main():
             elif op == 'EndTell':
                 state['tab'] -= 1
                 pass
-            elif op == 'RepeatInRange':
+            elif op in ('RepeatInRange', 'RepeatInCollection'):
                 print(word(), end=' ')
+            elif op in ('Consider', 'Of', 'MatchLiteral', 'BeginTransaction'):
+                # 2 bytes of static data skipped by the interpreter
+                print(word(), end=' ')
+            elif op in ('DefineProcedure', 'DefineClosure', 'DefineProperty',
+                        'Continue', 'PositionalContinue'):
+                v = word()
+                print(v, '#', literal(v), end=' ')
             elif op == 'Return':
                 pass
             elif op == 'MakeVector':
@@ -193,10 +202,10 @@ def main():
             elif op == 'MakeRecord':
                 pass
             elif op == 'ErrorHandler':
-                print(state['pos'] + word(), end=' ')
+                print(_curr_pos + 1 + word(), end=' ')
                 state['tab'] += 1
             elif op == 'EndErrorHandler':
-                print(state['pos'] + word(), end=' ')
+                print(_curr_pos + 1 + word(), end=' ')
                 state['tab'] -= 1
             elif op == 'HandleError':
                 print(word(), word(), end=' ')

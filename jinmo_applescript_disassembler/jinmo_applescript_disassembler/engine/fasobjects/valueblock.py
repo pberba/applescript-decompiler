@@ -18,7 +18,11 @@ def load(table, id, size):
         refloader = TInferiorRefList(size + 1, 1)
         refloader.set_table(table)
         refloader.readRefs()
-        res = refloader.doLoad()
+        # Register before loading children: children may refer back to us.
+        res = [runtimeobjects.NIL] * (size + 1)
+        res[0] = c
+        table.registerObject(id, res)
+        refloader.doLoad(res)
         # TODO: c is type index; use runtimeobjects to parse them?
         res[0] = c
         table.loader.stack.push(res)

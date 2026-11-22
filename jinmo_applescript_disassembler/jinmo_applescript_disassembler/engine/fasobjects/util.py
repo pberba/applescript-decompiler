@@ -19,8 +19,12 @@ class TInferiorRefList(object):
         for i in range(self.offset, self.size):
             self.refs[i] = Fixnum(self.table.loader.read_s16())
 
-    def doLoad(self):
-        r = [NIL] * self.size
+    def doLoad(self, r=None):
+        # `r` may be a pre-registered container so that back-references
+        # (e.g. a script object's parent pointing at its enclosing script)
+        # resolve to the object being loaded instead of failing.
+        if r is None:
+            r = [NIL] * self.size
         for i in range(self.offset, self.size):
             self.table.findObject(self.refs[i].value)
             r[i] = self.table.loader.stack.pop()

@@ -1,5 +1,5 @@
 from . import register
-from ..runtimeobjects import String
+from ..runtimeobjects import parse_value
 
 
 @register(18)
