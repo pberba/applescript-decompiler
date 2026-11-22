@@ -30,6 +30,19 @@ for _i in range(0, len(DATA) - 3, 4):
         _cmd = DATA[_i + 2][len("Parameter of command: "):]
         CORE_PARAMS.setdefault(_cmd, {}).setdefault(DATA[_i].strip("'"), DATA[_i + 1])
 
+# labels a handler takes without `given`: `on rangeSum from a thru b`
+PREPOSITIONS = {
+    code: name for code, name in CORE_PARAMS.get("Call&#149subroutine", {}).items()
+    if code not in ("givn", "with", "wout")
+}
+
+
+def split_labeled(labeled):
+    """(prepositional labels, `given` labels), keeping each group's order."""
+    prep = [(l, v) for l, v in labeled if isinstance(l, Keyword) and l.value in PREPOSITIONS]
+    given = [(l, v) for l, v in labeled if not (isinstance(l, Keyword) and l.value in PREPOSITIONS)]
+    return prep, given
+
 # considering/ignoring attributes, stored as 'cons' + attribute code
 CONSIDERATIONS = {
     "conscase": "case",
@@ -136,9 +149,13 @@ class AppleScriptPrinter:
             _node_name = identifier(_node_name)
 
         if node.labeled:
-            params = " given " + ", ".join(
-                f"{self.visit(label, 0)}:{identifier(var)}" for label, var in node.labeled
-            )
+            prep, given = split_labeled(node.labeled)
+            params = " of " + identifier(node.parameters[0]) if node.parameters else ""
+            params += "".join(f" {PREPOSITIONS[label.value]} {identifier(var)}" for label, var in prep)
+            if given:
+                params += " given " + ", ".join(
+                    f"{self.visit(label, 0)}:{identifier(var)}" for label, var in given
+                )
 
         header = f"{self._i(indent)}on {_node_name}{params}"
 
@@ -164,12 +181,22 @@ class AppleScriptPrinter:
                 target_src = target_src + "'s"
             target_src = target_src + " "
         if node.labeled:
-            given = ", ".join(
-                f"{self.visit(label, 0)}:{self.visit(value, 0)}" for label, value in node.labeled
-            )
-            # parenthesised: as an argument (`log (f given x:1)`), `given`
+            prep, given = split_labeled(node.labeled)
+
+            def arg(value):
+                src = self.visit(value, 0)
+                simple = isinstance(value, (StringLiteral, NumberLiteral, BooleanLiteral, VariableRef))
+                return src if simple or src.startswith("(") else f"({src})"
+
+            call = node.handler_name
+            if args:
+                call += " of " + arg(node.arguments[0])
+            call += "".join(f" {PREPOSITIONS[label.value]} {arg(value)}" for label, value in prep)
+            if given:
+                call += " given " + ", ".join(f"{self.visit(label, 0)}:{arg(value)}" for label, value in given)
+            # parenthesised: as an argument (`log (f given x:1)`), the labels
             # would otherwise bind to the enclosing command
-            return f"{self._i(indent)}({target_src}{node.handler_name} given {given})"
+            return f"{self._i(indent)}({target_src}{call})"
         _name = node.handler_name
         if _name in AS_TERMS:
             _name = f"|{_name}|"
