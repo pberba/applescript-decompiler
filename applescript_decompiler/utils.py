@@ -101,6 +101,16 @@ def load_package_sdefs():
                 code, name = enumerator.get("code"), enumerator.get("name")
                 if code and name:
                     enumerators.setdefault(code, name)
+            # Non-printable codes are written in hex (`caution` is 0x00000002)
+            # and are only unique with their enumeration: key them as the
+            # compiled value, enumeration code + enumerator code
+            for enumeration in root.iter("enumeration"):
+                prefix = enumeration.get("code") or ""
+                for enumerator in enumeration.findall("enumerator"):
+                    code, name = enumerator.get("code") or "", enumerator.get("name")
+                    if code.startswith("0x") and name and len(prefix) == 4:
+                        value = prefix + bytes.fromhex(code[2:]).decode("latin-1")
+                        enumerators.setdefault(value, name)
 
     return result, enumerators
 
