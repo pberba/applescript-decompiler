@@ -348,7 +348,9 @@ def decompile_script(
                 v = word() if "Extended" in op else (c & 0xF)
                 _comment += str(literal(v))
                 use_global(literal(v))
-                _var = VariableRef(literal(v).decode())
+                # a term such as `result` is a constant, not a name
+                v = literal(v)
+                _var = VariableRef(v.decode()) if isinstance(v, bytes) else convert_literal(v)
             elif op in ["PopVariable", "PopVariableExtended"]:
                 v = variable(word() if "Extended" in op else (c & 0xF))
                 _comment += str(v) + " "
