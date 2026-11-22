@@ -192,7 +192,10 @@ def decompile_script(
             state["pos"] += 2
             return r - 0x10000 if r & 0x8000 else r
 
+        # Index operands are unsigned: the BC* handlers read them with ldrh,
+        # while word() sign-extends for branch offsets.
         def literal(x):
+            x &= 0xFFFF
             if x >= len(literals):
                 return "[L%d]" % x
             return literals[x]
@@ -209,12 +212,14 @@ def decompile_script(
         def parent_variable(depth, x):
             # Operands are (depth, index): depth 1 is the enclosing script,
             # whose names (properties, handlers, script objects) are root[1].
+            depth, x = depth & 0xFFFF, x & 0xFFFF
             names = scopes[depth - 1] if 1 <= depth <= len(scopes) else []
             if 0 <= x < len(names) and isinstance(names[x], bytes):
                 return names[x].decode()
             return "parent_%d_%d" % (depth, x)
 
         def variable(x, local=False):
+            x &= 0xFFFF
             if 0 <= x < len(local_names) and isinstance(local_names[x], bytes):
                 return local_names[x].decode()
             return "var_%d" % x

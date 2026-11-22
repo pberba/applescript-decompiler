@@ -60,6 +60,7 @@ def main():
             return r - 0x10000 if r & 0x8000 else r
 
         def literal(x):
+            x &= 0xFFFF  # literal indices are unsigned (word() sign-extends)
             if x >= len(literals):
                 return '[L%d]' % x
             return literals[x]

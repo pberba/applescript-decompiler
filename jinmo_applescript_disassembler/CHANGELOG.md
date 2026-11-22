@@ -36,6 +36,11 @@ Bug fixes needed by the decompiler (`applescript_decompiler`).
 - Branch targets (`Jump`, `TestIf`, `And`, `Or`, `ErrorHandler`,
   `EndErrorHandler`) are computed explicitly as `opcode position + 1 +
   offset`.
+- **Literal indices are unsigned.** AppleScript reads index operands with
+  an unsigned 16-bit load, but `word()` sign-extends (as branch offsets
+  need), so an index of 0x8000 or more wrapped to the wrong literal.
+  Upstream [c360685](https://github.com/Jinmo/applescript-disassembler/commit/c360685)
+  prints such indices as `[L-n]`; here they resolve to their literal.
 
 ## 0.1.0
 

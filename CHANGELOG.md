@@ -98,6 +98,9 @@ Output that compiled to a different script, or didn't compile:
 - **Crashes** on `error 5`, bare `error`, `error "msg" number n`, labeled
   handler calls, handler calls on an object specifier, `whose` clauses,
   record values and data over 64 KB.
+- **Malformed files.** Literal and variable indices of 0x8000 and above
+  are read as unsigned, as AppleScript does; they were read as negative
+  and silently resolved to the wrong literal.
 - **Diagnostics** are readable: one `-- Function: name(args)` line per
   handler, `-- property name` for properties.
 
