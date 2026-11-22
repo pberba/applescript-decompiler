@@ -1,0 +1,112 @@
+# Changelog
+
+## 2.0.0 (2026-11-21)
+
+Decompiled run-only AppleScripts now compile, and recompile to the same
+bytecode as the original.
+
+- **Valid AppleScript.** Statements, precedence, string escapes,
+  terminology and declarations are reconstructed so the output compiles
+  as is.
+- **Round-trip tested.** 57 test scripts, from single language features
+  to large AppleScriptObjC programs, are compiled run-only, decompiled and
+  recompiled; both builds must have the same bytecode, literals and names.
+  Test scripts are only compiled, never run.
+- **Real variable names.** Run-only scripts still store their variable
+  names, and the output now uses them instead of `[var_N]`.
+- **AppleScriptObjC.** `use framework` clauses, `current application's …`
+  calls, ObjC method calls, and script objects with inheritance.
+- **JXA.** Compiled JavaScript for Automation keeps its source, even when
+  compiled run-only, so it is extracted rather than decompiled.
+- **Docs.** `AGENTS.md` and a `docs/` folder for contributors and library
+  users.
+
+### Breaking changes
+
+- **stdout is only the decompiled source.** Diagnostics (handler
+  signatures, properties, warnings, the `-d` trace), the path header and
+  the `-----` separator now go to stderr.
+  `applescript_decompile x.scpt > x.applescript` writes a script that
+  compiles as is. Tooling that split stdout on `-----` should read stdout
+  directly, or call `run_decompiler()`, which now returns the source.
+- **`--force` only means "ignore errors".** It used to also make the
+  decompiler recurse into script objects; script objects are now always
+  decompiled.
+- **`convert_literal()` returns `VariableRef` for identifiers.** Record
+  labels and property names (stored as bytes) were returned as
+  `StringLiteral`, which printed them as quoted strings.
+
+### Added
+
+- **JXA scripts.** Compiled JavaScript for Automation files (even
+  run-only) store their source, which is now printed as is.
+- **Bundles.** `.scptd` and `.app` paths are accepted for both languages.
+- **Script objects**: top level, nested, and defined inside handlers,
+  including their properties, run code and `property parent`.
+- **Language features** that were dropped, crashed or printed wrongly:
+  - blocks: `considering`/`ignoring`, `with timeout`, `use` clauses
+    (AppleScriptObjC frameworks), `continue name(...)`
+  - handlers: labeled parameters (`on greet given name:n` and
+    `greet given name:"bob"`), the variables of
+    `on error msg number n from f partial result p to t`
+  - declarations: `property`, `global` (for globals used outside `run`)
+    and `local`, in declaration order
+  - specifiers: `whose` clauses, `beginning of`, `middle`, `some`,
+    `before`/`after`, `id`/`named` key forms, `item 2 thru 4 of L`
+  - operators: `div`, `starts with`, `ends with`
+  - values: negative and long integers, reals, booleans, records, empty
+    lists, `copy x to y`, `a reference to`, stored references,
+    destructuring (`set {a, b} to L`)
+- **Terminology:** enumerated values (`rounding as taught in school`) and
+  Standard Additions terms (`port`) are named instead of printed as raw
+  codes.
+- **`APPLESCRIPT_DECOMPILER_SDEF_DIR`:** directories of extra `.sdef`
+  files, loaded after the bundled dictionaries.
+- **Tests:** round-trip bytecode tests (macOS), AST library API tests,
+  and JXA extraction tests. Fixtures are only compiled, never run.
+- **Docs:** `AGENTS.md`, and `docs/` covering setup, how decompiling
+  works, library usage, analyzers, scripting dictionaries and testing.
+
+### Fixed
+
+Output that compiled to a different script, or didn't compile:
+
+- **Names.** Variables keep the names stored in the script instead of
+  `[var_N]`; parent variables resolve to properties; identifiers that
+  aren't plain or clash with terms are barred (`|weird name|`, `|length|`,
+  in definitions too); `me`, `my` and `its` are printed where each
+  applies.
+- **Lost statements.** A handler's, `else` branch's, `try` body's or
+  `on error` block's last assignment; the implicit result of a handler,
+  no longer turned into `return`; the value of an explicit `return f()`;
+  the `else` branch and everything after an `if` whose then-branch ends
+  in a loop; expressions inside loops that use `Dup` (e.g.
+  `items i thru (i + 2) of L`).
+- **Precedence and syntax.** Nested operators, `thru` bounds and `of`
+  containers are parenthesised; the compiler's own `as boolean` in
+  `and`/`or` is dropped; `error` is printed as a statement; handlers
+  without parameters get `()`; a labeled call used as an argument is
+  parenthesised.
+- **Literals.** Strings use AppleScript's escapes (`\"`, `\\`, `\n`, `\t`,
+  `\r`) instead of JSON's `\uXXXX`; application literals print as
+  `application "Name"`, including names with spaces.
+- **Terminology.** The first definition of a code wins (not a plural or
+  synonym); commands use their own parameter names (`make new folder at
+  x`, not `make each folder to x`); Standard Additions parameter names no
+  longer leak into other contexts.
+- **Crashes** on `error 5`, bare `error`, `error "msg" number n`, labeled
+  handler calls, handler calls on an object specifier, `whose` clauses and
+  record values.
+- **Diagnostics** are readable: one `-- Function: name(args)` line per
+  handler, `-- property name` for properties.
+
+### Disassembler
+
+The vendored disassembler is now 0.2.0: it loads scripts that contain
+script objects, and its listing no longer goes out of step on opcodes
+with operands. See
+[jinmo_applescript_disassembler/CHANGELOG.md](jinmo_applescript_disassembler/CHANGELOG.md).
+
+## 1.0.2 and earlier
+
+See the `v1.0.1` and `v1.0.2` tags.
