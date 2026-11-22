@@ -26,6 +26,18 @@ LITERAL_OFFSET = 5
 CODE_OFFSET = 6
 
 
+def handler_label(name):
+    """A readable handler/script name for diagnostics: a user name
+    (`rangeDemo`), or an event handler's code pair (`aevt/oapp` for `on run`)."""
+    if isinstance(name, bytes):
+        return name.decode()
+    try:
+        ident = name.value.identifier
+        return number_to_code(ident[0]) + "/" + number_to_code(ident[1])
+    except Exception:
+        return str(name)
+
+
 def run_decompiler(f, add_comments=False, force=False, analyzer=None, debug=False):
     script = decompile_script(f[ROOT_OFFSET], [], add_comments, force, debug)
     print("-----")
@@ -72,8 +84,6 @@ def decompile_script(
         state = {"pos": 0}
         function = root[function_offset]
 
-        print("-- === data offset %d ===" % function_offset)
-
         names = root[1] if isinstance(root[1], list) else []
         member = names[function_offset - 2] if function_offset - 2 < len(names) else None
         if (
@@ -102,7 +112,7 @@ def decompile_script(
 
         # A script object: [15, name, ?, parent script, script body]
         if function[0] == 15 and len(function) > 4 and isinstance(function[4], list):
-            print(f"-- {function[NAME_OFFSET + 1]} is a script object")
+            print(f"-- {handler_label(function[NAME_OFFSET + 1])} is a script object")
             parent = function[3]
             parent_name = None
             if isinstance(parent, list) and len(parent) > 1 and isinstance(parent[1], bytes):
@@ -114,30 +124,30 @@ def decompile_script(
             )
 
         if len(function) < 7:
-            print("-- <maybe binding?>", function)
-            # A property whose value is a string, list, ...
+            # A property whose value is a string, list, record, ... (resolved,
+            # not an unknown binding).
             if function_offset - 2 < len(names) and isinstance(names[function_offset - 2], bytes):
+                _prop_name = names[function_offset - 2].decode()
+                print(f"-- property {_prop_name}")
                 handlers.append(
                     PropertyDecl(
-                        name=names[function_offset - 2].decode(),
+                        name=_prop_name,
                         initial_value=convert_literal(function),
                     )
                 )
+            else:
+                print("-- <skipped non-handler value>")
             return
 
         literals = function[LITERAL_OFFSET + 1]
         name = function[NAME_OFFSET + 1]
         args = function[ARGS_OFFSET + 1]
 
-        print("-- Function name :", name)
-        print("-- Function arguments: ", end=" ")
-
         _args = []
         if isinstance(args, list) and len(args) >= 3 and isinstance(args[2], list):
-            print(args[2][1:])
             _args = args[2][1:]
-        else:
-            print("-- <empty or unknown>")
+        _arg_names = ", ".join(a.decode() if isinstance(a, bytes) else str(a) for a in _args)
+        print(f"-- Function: {handler_label(name)}({_arg_names})")
 
         _labeled = []
         _binding = function[LABELED_OFFSET + 1]

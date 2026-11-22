@@ -1,45 +1,19 @@
 -- demo/demo_runonly.scpt
 --
--- === data offset 2 ===
--- <maybe binding?> [177, <Value type=string value=b'\x00L\x00O\x00G\x00:\x00 '>]
--- === data offset 3 ===
--- Function name : <Value type=object value=<Value type=event_identifier value=b'aevt'-b'oapp'-b'null'-b'\x00\x00\x80\x00'-b'****'-b'\x00\x00\x90\x00'>>
--- Function arguments:  -- <empty or unknown>
--- === data offset 4 ===
--- <maybe binding?> [177, <Value type=string value=b'\x00O\x00t\x00h\x00e\x00r\x00 \x00L\x00O\x00G\x00:\x00 '>]
--- === data offset 5 ===
--- Function name : b'collectEnvironmentInfo'
--- Function arguments:  -- <empty or unknown>
--- === data offset 6 ===
--- Function name : b'deobfuscateStringList'
--- Function arguments:  [b'fragmentList']
--- === data offset 7 ===
--- Function name : b'demoRepeats'
--- Function arguments:  -- <empty or unknown>
--- === data offset 8 ===
--- Function name : b'demoIfStatements'
--- Function arguments:  -- <empty or unknown>
--- === data offset 9 ===
--- Function name : b'decodeWithOffset'
--- Function arguments:  [b'codeList', b'off']
--- === data offset 10 ===
--- Function name : b'get_url'
--- Function arguments:  -- <empty or unknown>
--- === data offset 11 ===
--- Function name : b'finderDemo'
--- Function arguments:  -- <empty or unknown>
--- === data offset 12 ===
--- Function name : b'systemEventsDemo'
--- Function arguments:  -- <empty or unknown>
--- === data offset 13 ===
--- Function name : b'logMessage'
--- Function arguments:  [b'msg']
--- === data offset 14 ===
--- Function name : b'escapeQuotes'
--- Function arguments:  [b't']
--- === data offset 15 ===
--- Function name : b'rangeDemo'
--- Function arguments:  -- <empty or unknown>
+-- property current_prefix
+-- Function: aevt/oapp()
+-- property current_prefix2
+-- Function: collectEnvironmentInfo()
+-- Function: deobfuscateStringList(fragmentList)
+-- Function: demoRepeats()
+-- Function: demoIfStatements()
+-- Function: decodeWithOffset(codeList, off)
+-- Function: get_url()
+-- Function: finderDemo()
+-- Function: systemEventsDemo()
+-- Function: logMessage(msg)
+-- Function: escapeQuotes(t)
+-- Function: rangeDemo()
 -----
 property current_prefix : "LOG: "
 
