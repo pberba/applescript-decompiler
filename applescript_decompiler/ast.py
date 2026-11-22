@@ -388,6 +388,13 @@ class AppleScriptPrinter:
             return ENUMERATORS[node.value]
         if len(node.value) == 8 and node.value[4:] in ENUMERATORS:
             return ENUMERATORS[node.value[4:]]
+        if any(not 0x20 <= ord(ch) <= 0x7E for ch in node.value):
+            # a code that isn't text and isn't in a bundled dictionary; it needs
+            # the app's sdef (APPLESCRIPT_DECOMPILER_SDEF_DIR) to print as a term
+            head, tail = node.value[:4], node.value[4:]
+            if all(0x20 <= ord(ch) <= 0x7E for ch in head) and tail:
+                return f"«constant {head} 0x{tail.encode('latin-1').hex().upper()}»"
+            return f"«constant 0x{node.value.encode('latin-1').hex().upper()}»"
         return f"{node.value}"
 
     def visit_NumberLiteral(self, node: NumberLiteral, indent: int = 0) -> str:
@@ -962,7 +969,9 @@ class CommandCall(Expression):
 
 def number_to_code(num):
     num_bytes = (num.bit_length() + 7) // 8
-    return num.to_bytes(num_bytes, "big").decode("ascii")
+    # latin-1 keeps every byte: some enumerator codes aren't text (Office's
+    # 'e188' + 0x02BC0039 is an enumeration code and a number)
+    return num.to_bytes(num_bytes, "big").decode("latin-1")
 
 
 def convert_reference(spec):
