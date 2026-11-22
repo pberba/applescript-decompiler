@@ -96,8 +96,8 @@ Output that compiled to a different script, or didn't compile:
   x`, not `make each folder to x`); Standard Additions parameter names no
   longer leak into other contexts.
 - **Crashes** on `error 5`, bare `error`, `error "msg" number n`, labeled
-  handler calls, handler calls on an object specifier, `whose` clauses and
-  record values.
+  handler calls, handler calls on an object specifier, `whose` clauses,
+  record values and data over 64 KB.
 - **Diagnostics** are readable: one `-- Function: name(args)` line per
   handler, `-- property name` for properties.
 

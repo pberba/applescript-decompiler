@@ -158,3 +158,11 @@ def test_bytecode_equivalent(src, roundtrip):
     )
     assert r.returncode == 0, f"decompiled source does not compile:\n{r.stderr}\n{decompiled.read_text()}"
     assert canonical_script(d / "recompiled.scpt") == canonical_script(original), decompiled.read_text()
+
+
+def test_bytecode_equivalent_long_raw_data(tmp_path, roundtrip):
+    """Raw data over 64 KB is stored as a long data block (object type 18).
+    Generated here rather than committed as a 130 KB fixture."""
+    src = tmp_path / "long_raw_data.applescript"
+    src.write_text("set x to «data rdat" + "41" * 70000 + "»\nreturn x\n")
+    test_bytecode_equivalent(src, roundtrip)

@@ -20,6 +20,9 @@ Bug fixes needed by the decompiler (`applescript_decompiler`).
   and there was no class for raw data. Ported from upstream
   [eea89bc](https://github.com/Jinmo/applescript-disassembler/commit/eea89bc),
   which also makes an unknown type raise a clear `ValueError`.
+- **Data over 64 KB loads.** Long data blocks (object type 18) crashed
+  with `NameError`: `long_data_block.py` called `parse_value` without
+  importing it (upstream has the same bug).
 
 ### Disassembler (`disassembler.py`)
 
