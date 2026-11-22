@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Loader (`engine`)
+
+- **RefID errors go to stderr.** `FasLoadTable.loadObject()` printed
+  "RefID doesn't match" to stdout, mixing it into the decompiled source
+  and into tools that write results to stdout.
+
 ## 0.2.0 (2026-11-21)
 
 Bug fixes needed by the decompiler (`applescript_decompiler`).

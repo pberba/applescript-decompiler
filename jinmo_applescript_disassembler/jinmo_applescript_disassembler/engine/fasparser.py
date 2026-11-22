@@ -130,7 +130,7 @@ class FasLoadTable(TRefTable):
                 err = "%08x: AppleScript: Error while loading script, RefID doesn't match. Expected %d, found %d." % (
                     pos, num, context.ref)
                 context.reuseHeader = True
-                print(err, file=sys.stdout)
+                print(err, file=sys.stderr)
                 context.refErrors.append(err)
                 if len(context.refErrors) >= 6:
                     raise Exception("AppleScript: Too many RefID errors.")
