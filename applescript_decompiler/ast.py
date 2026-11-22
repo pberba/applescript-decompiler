@@ -139,6 +139,22 @@ class AppleScriptPrinter:
         if isinstance(_node_name, rto.Object):
             val = _node_name.value
             if isinstance(val, rto.EventIdentifier):
+                code = number_to_code(val.identifier[0]) + number_to_code(val.identifier[1])
+                event = SDEFS[STANDARD_ADDITIONS].get(code)
+                if event is not None:
+                    # a Standard Additions event (`on open location theURL`,
+                    # `on adding folder items to f after receiving items`):
+                    # the direct parameter and labels are written in words
+                    names = event["parameters"]
+                    header = f"{self._i(indent)}on {event['name']}"
+                    if node.parameters:
+                        header += " " + identifier(node.parameters[0])
+                    for label, var in node.labeled:
+                        word = names.get(label.value) if isinstance(label, Keyword) else None
+                        header += f" {word or self.visit(label, 0)} {identifier(var)}"
+                    body = "\n".join(self.visit(stmt, indent + 1) for stmt in node.body)
+                    footer = f"{self._i(indent)}end {event['name']}"
+                    return f"{header}\n{body}\n{footer}" if body else f"{header}\n{footer}"
                 _name = val.identifier[1].to_bytes(4, "big").decode("ascii")
                 _node_name = EVENT_CODES[DEFAULT_TARGET].get(_name[:4], _name)
             else:

@@ -1017,6 +1017,7 @@ def decompile_script(
                 n.decode()
                 for n in local_names
                 if isinstance(n, bytes) and n.decode() not in _bound and n not in _args
+                and n.decode() not in {v for _, v in _labeled}  # `after receiving theItems`
             ]
             if _declared:
                 block_stack[0].body.insert(0, VariableDeclaration(names=_declared))
