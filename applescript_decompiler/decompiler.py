@@ -10,6 +10,11 @@ from applescript_decompiler.utils import load_object
 from applescript_decompiler.jxa import extract_jxa_source, is_jxa, resolve_script_path
 import jinmo_applescript_disassembler.engine.runtimeobjects as rto
 
+
+def _diag(*args, **kwargs):
+    """Diagnostics go to stderr; stdout carries only the decompiled source."""
+    print(*args, file=sys.stderr, **kwargs)
+
 # Labels of the variables in `on error msg number n from f partial result p to t`
 ERROR_LABELS = {"errn": "number", "erob": "from", "ptlr": "partial result", "errt": "to"}
 
@@ -39,9 +44,12 @@ def handler_label(name):
 
 
 def run_decompiler(f, add_comments=False, force=False, analyzer=None, debug=False):
+    """Decompile a loaded script, print the source to stdout and return it."""
     script = decompile_script(f[ROOT_OFFSET], [], add_comments, force, debug)
-    print("-----")
-    print(script.to_source(analyzer=analyzer))
+    _diag("-----")
+    source = script.to_source(analyzer=analyzer)
+    print(source)
+    return source
 
 
 def script_from_init(statements, init_locals):
@@ -91,12 +99,12 @@ def decompile_script(
             and isinstance(member.value, rto.Constant)
             and number_to_code(member.value.value) == "pimr"
         ):
-            print("-- use clauses")
+            _diag("-- use clauses")
             uses.extend(use_clauses(function))
             return
 
         if type(function) is not list:
-            print("-- <not a function>")
+            _diag("-- <not a function>")
             # A script-level value that isn't a handler is a property. Kept
             # in declaration order among the handlers: the order of the
             # script's members is part of the compiled script.
@@ -112,7 +120,7 @@ def decompile_script(
 
         # A script object: [15, name, ?, parent script, script body]
         if function[0] == 15 and len(function) > 4 and isinstance(function[4], list):
-            print(f"-- {handler_label(function[NAME_OFFSET + 1])} is a script object")
+            _diag(f"-- {handler_label(function[NAME_OFFSET + 1])} is a script object")
             parent = function[3]
             parent_name = None
             if isinstance(parent, list) and len(parent) > 1 and isinstance(parent[1], bytes):
@@ -128,7 +136,7 @@ def decompile_script(
             # not an unknown binding).
             if function_offset - 2 < len(names) and isinstance(names[function_offset - 2], bytes):
                 _prop_name = names[function_offset - 2].decode()
-                print(f"-- property {_prop_name}")
+                _diag(f"-- property {_prop_name}")
                 handlers.append(
                     PropertyDecl(
                         name=_prop_name,
@@ -136,7 +144,7 @@ def decompile_script(
                     )
                 )
             else:
-                print("-- <skipped non-handler value>")
+                _diag("-- <skipped non-handler value>")
             return
 
         literals = function[LITERAL_OFFSET + 1]
@@ -147,7 +155,7 @@ def decompile_script(
         if isinstance(args, list) and len(args) >= 3 and isinstance(args[2], list):
             _args = args[2][1:]
         _arg_names = ", ".join(a.decode() if isinstance(a, bytes) else str(a) for a in _args)
-        print(f"-- Function: {handler_label(name)}({_arg_names})")
+        _diag(f"-- Function: {handler_label(name)}({_arg_names})")
 
         _labeled = []
         _binding = function[LABELED_OFFSET + 1]
@@ -235,9 +243,9 @@ def decompile_script(
             _comment += op + " "
             _statements = []
 
-            if debug: 
-                print(_stack)
-                print(_comment, end = ' ')
+            if debug:
+                _diag(_stack)
+                _diag(_comment, end=' ')
 
             # AndOp/OrOp special cases since they have some control flow
             # but are actuall expressions
@@ -515,7 +523,7 @@ def decompile_script(
                     _kind = BinaryOpKind.AND if opcodes[t - 33] == "And" else BinaryOpKind.OR
                     _stack.append(BinaryOp(op=_kind, left=l, right=r))
                 else:
-                    print(f"-- Warning {op}:{sub_operation} is not implemented")
+                    _diag(f"-- Warning {op}:{sub_operation} is not implemented")
                     _comment += " (not implemented)"
                     _stack.pop()
             elif op == "SetData":
@@ -883,7 +891,7 @@ def decompile_script(
             if _comment is not None and add_comments:
                 _statements = [Comment(comment=_comment)] + _statements
                 
-            if debug: print(' '.join(_comment.split(' ')[2:]))
+            if debug: _diag(' '.join(_comment.split(' ')[2:]))
 
             _prev_op = op
             while True:
@@ -1002,7 +1010,7 @@ def decompile_script(
             if ret is not None:
                 handlers.append(ret)
         except Exception as e:
-            print("-- Failed to decompile")
+            _diag("-- Failed to decompile")
             if not force:
                 raise e
     names = root[1] if isinstance(root[1], list) else []
@@ -1064,14 +1072,14 @@ def cli():
 
     if is_jxa(path):
         # JavaScript for Automation: the source is stored as text
-        print(f'// {path}')
-        print('// JavaScript for Automation (JXA): source stored in the script, not compiled')
-        print('-----')
+        _diag(f'// {path}')
+        _diag('// JavaScript for Automation (JXA): source stored in the script, not compiled')
+        _diag('-----')
         print(extract_jxa_source(path))
         return
 
-    print(f'-- {path}')
-    print('--')
+    _diag(f'-- {path}')
+    _diag('--')
     f = Loader()
     f = f.load(resolve_script_path(path))
     run_decompiler(f, add_comments=args.comments, force=args.force, analyzer=analyzer, debug=args.debug)

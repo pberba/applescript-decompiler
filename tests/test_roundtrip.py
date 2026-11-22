@@ -65,11 +65,8 @@ def osacompile_runonly(src: Path, out: Path) -> Path:
 
 
 def decompile(scpt: Path) -> str:
-    buf = io.StringIO()
-    with contextlib.redirect_stdout(buf):
-        run_decompiler(Loader().load(str(scpt)))
-    # Everything before the "-----" separator is diagnostic comments.
-    return buf.getvalue().split("\n-----\n", 1)[1]
+    with contextlib.redirect_stdout(io.StringIO()):
+        return run_decompiler(Loader().load(str(scpt)))
 
 
 # ---- canonical form of a loaded script ---------------------------------

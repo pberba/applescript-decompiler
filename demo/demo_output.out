@@ -1,20 +1,3 @@
--- demo/demo_runonly.scpt
---
--- property current_prefix
--- Function: aevt/oapp()
--- property current_prefix2
--- Function: collectEnvironmentInfo()
--- Function: deobfuscateStringList(fragmentList)
--- Function: demoRepeats()
--- Function: demoIfStatements()
--- Function: decodeWithOffset(codeList, off)
--- Function: get_url()
--- Function: finderDemo()
--- Function: systemEventsDemo()
--- Function: logMessage(msg)
--- Function: escapeQuotes(t)
--- Function: rangeDemo()
------
 property current_prefix : "LOG: "
 
 on run

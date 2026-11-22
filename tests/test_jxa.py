@@ -53,4 +53,5 @@ def test_cli_prints_jxa_source(tmp_path):
             cli()
     finally:
         sys.argv = argv
-    assert buf.getvalue().split("\n-----\n", 1)[1] == src.read_text() + "\n"
+    # stdout is exactly the source; the header lines go to stderr
+    assert buf.getvalue() == src.read_text() + "\n"
