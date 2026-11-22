@@ -165,6 +165,10 @@ def decompile_script(
         _args = []
         if isinstance(args, list) and len(args) >= 3 and isinstance(args[2], list):
             _args = args[2][1:]
+        elif isinstance(args, bytes):
+            # an event handler's direct parameter (`on run argv`, `on open
+            # theFiles`) is stored as a bare name, not a list
+            _args = [args]
         _arg_names = ", ".join(a.decode() if isinstance(a, bytes) else str(a) for a in _args)
         _info(f"-- Function: {handler_label(name)}({_arg_names})")
 
