@@ -22,3 +22,9 @@ def test_enumerator_with_binary_code():
     value = int.from_bytes(b"e188\x02\xbc\x00\x39", "big")
     source = returns(rto.Object(rto.Constant(value)))
     assert "«constant e188 0x02BC0039»" in source, source  # no raw control bytes
+
+
+def test_styled_text_literal():
+    # old Script Editor files store text as styled text: MacRoman bytes + a style
+    source = returns(rto.Object(rto.UnicodeText(b"caf\x8e /tmp/example", b"\x00\x00")))
+    assert '"café /tmp/example"' in source, source  # (a final `return x` prints as `x`)

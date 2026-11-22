@@ -1046,6 +1046,9 @@ def convert_literal(lit, target=None):
         return VariableRef(name=lit.decode())
     elif isinstance(lit, rto.String):
         return StringLiteral(value=lit.value.decode("utf-16-be"))
+    elif isinstance(lit, rto.UnicodeText):
+        # styled text from old Script Editor files: MacRoman bytes plus a style
+        return StringLiteral(value=bytes(lit.text).decode("mac_roman"))
     elif isinstance(lit, rto.RawData):
         return RawDataLiteral(type=lit.value[:4].decode("mac_roman"), data=bytes(lit.value[4:]))
     elif isinstance(lit, db.Descriptor):
