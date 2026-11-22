@@ -66,28 +66,41 @@ def load_sdefs_from_package():
     return load_package_sdefs()[0]
 
 
+SDEF_DIR_ENV = "APPLESCRIPT_DECOMPILER_SDEF_DIR"
+
+
 def load_package_sdefs():
     """Parse each bundled sdef once. Returns (app name -> commands,
     enumerator code -> name), e.g. 'rndS' -> 'as taught in school'; for
-    enumerators the first definition wins."""
-    data_dir = resources.files("applescript_decompiler.data")
+    enumerators the first definition wins.
+
+    Directories listed in the APPLESCRIPT_DECOMPILER_SDEF_DIR environment
+    variable (os.pathsep-separated) are loaded after the bundled ones, so a
+    .sdef dropped there adds terms for an unbundled app, or overrides a
+    bundled app's commands when the filename stem matches."""
+    data_dirs = [resources.files("applescript_decompiler.data")]
+    for extra in os.environ.get(SDEF_DIR_ENV, "").split(os.pathsep):
+        if extra and os.path.isdir(extra):
+            data_dirs.append(Path(extra))
+
     result = defaultdict(dict)
     enumerators = {}
 
-    for entry in sorted(data_dir.iterdir(), key=lambda e: e.name):
-        if not (entry.is_file() and entry.suffix.lower() == ".sdef"):
-            continue
+    for data_dir in data_dirs:
+        for entry in sorted(data_dir.iterdir(), key=lambda e: e.name):
+            if not (entry.is_file() and entry.suffix.lower() == ".sdef"):
+                continue
 
-        app_name = entry.stem  # "Finder.sdef" -> "Finder"
+            app_name = entry.stem  # "Finder.sdef" -> "Finder"
 
-        with entry.open("rb") as f:
-            root = ET.parse(f).getroot()
+            with entry.open("rb") as f:
+                root = ET.parse(f).getroot()
 
-        result[app_name] = sdef_commands(root)
-        for enumerator in root.iter("enumerator"):
-            code, name = enumerator.get("code"), enumerator.get("name")
-            if code and name:
-                enumerators.setdefault(code, name)
+            result[app_name] = sdef_commands(root)
+            for enumerator in root.iter("enumerator"):
+                code, name = enumerator.get("code"), enumerator.get("name")
+                if code and name:
+                    enumerators.setdefault(code, name)
 
     return result, enumerators
 
