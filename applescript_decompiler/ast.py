@@ -985,6 +985,9 @@ def convert_literal(lit, target=None):
     if isinstance(lit, list) and len(lit) == 2 and lit[0] == 20 and isinstance(lit[1], list):
         # stored reference, e.g. `property P : a reference to current application's NSString`
         return UnaryOp(op=UnaryOpKind.REFERENCE_TO, operand=convert_reference(lit[1]))
+    if isinstance(lit, list) and len(lit) >= 3 and lit[0] in (21, 22, 24):
+        # a specifier the compiler built from constants, e.g. `class of "x"`
+        return convert_reference(lit)
     if isinstance(lit, list) and len(lit) == 3 and lit[0] == 4 and isinstance(lit[2], list):
         # list value: [4, count, [?, item, item, ...]]
         return ListLiteral(elements=[convert_literal(e) for e in lit[2][1:]])
