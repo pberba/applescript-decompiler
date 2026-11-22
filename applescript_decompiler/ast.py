@@ -22,6 +22,14 @@ for _i in range(0, len(DATA) - 3, 4):
     ):
         STANDARD_ADDITIONS_TERMS.setdefault(DATA[_i].strip("'"), DATA[_i + 1])
 
+# parameters of the core commands (make, duplicate, …), by command name, for
+# apps whose bundled sdef doesn't define the command
+CORE_PARAMS = {}
+for _i in range(0, len(DATA) - 3, 4):
+    if DATA[_i + 3] == "AppleScript Language" and DATA[_i + 2].startswith("Parameter of command: "):
+        _cmd = DATA[_i + 2][len("Parameter of command: "):]
+        CORE_PARAMS.setdefault(_cmd, {}).setdefault(DATA[_i].strip("'"), DATA[_i + 1])
+
 # considering/ignoring attributes, stored as 'cons' + attribute code
 CONSIDERATIONS = {
     "conscase": "case",
@@ -53,6 +61,7 @@ def identifier(name):
 class AppleScriptPrinter:
     target = DEFAULT_TARGET
     command = "None"
+    core_params = {}  # parameters of the core command being printed, if any
     analyzer = None
 
     def __init__(self, analyzer=None):
@@ -357,6 +366,8 @@ class AppleScriptPrinter:
             params = SDEFS[self.target].get(self.command, {}).get("parameters", {})
             if node.value in params:
                 return params[node.value]
+        if node.value in self.core_params:  # e.g. System Events' `make … at`
+            return self.core_params[node.value]
 
         if node.value in SDEFS[STANDARD_ADDITIONS]:
             return f"{SDEFS[STANDARD_ADDITIONS][node.value]['name']}"
@@ -513,10 +524,11 @@ class AppleScriptPrinter:
             return f"-({operand})"
         elif node.op is UnaryOpKind.NOT:
             return f"not ({operand})"
-        elif node.op is UnaryOpKind.BEGINNING_OF:
-            return f"beginning of ({operand})"
-        elif node.op is UnaryOpKind.END_OF:
-            return f"end of ({operand})"
+        elif node.op in (UnaryOpKind.BEGINNING_OF, UnaryOpKind.END_OF):
+            word = "beginning" if node.op is UnaryOpKind.BEGINNING_OF else "end"
+            if operand == "__it__":
+                return word  # `make … at end`: the end of the tell target
+            return f"{word} of ({operand})"
         elif node.op is UnaryOpKind.REFERENCE_TO:
             return f"a reference to ({operand})"
         elif node.op is UnaryOpKind.MIDDLE:
@@ -531,6 +543,8 @@ class AppleScriptPrinter:
     def visit_CommandCall(self, node: CommandCall, indent: int = 0) -> str:
         prev_command = self.command
         prev_target = self.target
+        prev_core_params = self.core_params
+        self.core_params = {}
 
         # an application name (e.g. "System Events"), used as is
         _target_name = (
@@ -549,6 +563,7 @@ class AppleScriptPrinter:
             _command_name = f"{SDEFS[STANDARD_ADDITIONS][node.command_name]['name']}"
         elif node.command_name[4:] in EVENT_CODES[DEFAULT_TARGET]:
             _command_name = f"{EVENT_CODES[DEFAULT_TARGET][node.command_name[4:]]}"
+            self.core_params = CORE_PARAMS.get(_command_name, {})
 
         args_src = [self.visit(arg, 0) for arg in node.arguments]
         if args_src and args_src[0] == "__it__":
@@ -560,6 +575,7 @@ class AppleScriptPrinter:
 
         self.command = prev_command
         self.target = prev_target
+        self.core_params = prev_core_params
 
         if node.command_name == "error":
             # `error` is a statement, not an expression: no parentheses
