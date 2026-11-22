@@ -101,16 +101,19 @@ def load_package_sdefs():
                 code, name = enumerator.get("code"), enumerator.get("name")
                 if code and name:
                     enumerators.setdefault(code, name)
-            # Non-printable codes are written in hex (`caution` is 0x00000002)
-            # and are only unique with their enumeration: key them as the
-            # compiled value, enumeration code + enumerator code
+            # An enumerator code is only unique with its enumeration ('desk' is
+            # "desktop" in afdr but "desktop folder" in afdm), so also key each
+            # one as the compiled value: enumeration code + enumerator code.
+            # Non-printable codes are written in hex (`caution` is 0x00000002).
             for enumeration in root.iter("enumeration"):
                 prefix = enumeration.get("code") or ""
                 for enumerator in enumeration.findall("enumerator"):
                     code, name = enumerator.get("code") or "", enumerator.get("name")
-                    if code.startswith("0x") and name and len(prefix) == 4:
-                        value = prefix + bytes.fromhex(code[2:]).decode("latin-1")
-                        enumerators.setdefault(value, name)
+                    if not (code and name and len(prefix) == 4):
+                        continue
+                    if code.startswith("0x"):
+                        code = bytes.fromhex(code[2:]).decode("latin-1")
+                    enumerators.setdefault(prefix + code, name)
 
     return result, enumerators
 
