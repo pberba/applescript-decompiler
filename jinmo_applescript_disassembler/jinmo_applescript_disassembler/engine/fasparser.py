@@ -152,12 +152,20 @@ class FasLoadTable(TRefTable):
         if t is None:
             raise Exception('Error -1702: unknown object type: %d!' % index)
 
+        header_ref = ref
         if index in (2, 7, 10, 11):
             ref = 0  # not used in binary
 
         prevlen = len(stack)
         t(self, ref, inlined)
         assert len(stack) == prevlen + 1, t.__module__  # little check
+
+        # Immediates, code and user identifiers don't register themselves, but a
+        # later object can still refer back to them by RefID (scripts that reuse
+        # one literal). Without an entry that lookup misses and reads the next
+        # object in the stream instead.
+        if header_ref > 0 and not self.lookUpByRefId(header_ref)[0]:
+            self.registerObject(header_ref, stack[-1])
 
     def findObject(self, num, load=True):
         if not load:  # FindObjectNoLoad

@@ -39,3 +39,35 @@ def test_refid_errors_go_to_stderr():
         t.loadObject(5)
     assert out.getvalue() == ""  # stdout carries the decompiled source
     assert "RefID doesn't match" in err.getvalue()
+
+
+def immediate_then_backref(index, ref, inlined, body=b""):
+    """An object with RefID `ref`, then nothing: a second lookup of `ref`
+    must come from the ref table, not from the (empty) rest of the stream."""
+    t = table(header(index, ref, inlined) + body)
+    t.findObject(ref)
+    first = t.loader.stack.pop()
+    with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+        t.findObject(ref)
+    return first, t.loader.stack.pop()
+
+
+def test_back_reference_to_integer():
+    first, again = immediate_then_backref(3, 5, 7)
+    assert repr(again) == repr(first)  # not NIL
+
+
+def test_back_reference_to_boolean():
+    first, again = immediate_then_backref(9, 6, 1)
+    assert again is True and first is True
+
+
+def test_back_reference_to_real():
+    first, again = immediate_then_backref(8, 9, 8, struct.pack(">d", 0.1))
+    assert again == first == 0.1
+
+
+def test_back_reference_to_class_constant():
+    # code identifier, kind 10: a 4-byte class code ('ctxt')
+    first, again = immediate_then_backref(10, 11, 4, bytes([10]) + b"ctxt")
+    assert repr(again) == repr(first)

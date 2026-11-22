@@ -7,6 +7,14 @@
 - **RefID errors go to stderr.** `FasLoadTable.loadObject()` printed
   "RefID doesn't match" to stdout, mixing it into the decompiled source
   and into tools that write results to stdout.
+- **Back-references to immediates and identifiers resolve.** Integers,
+  reals, booleans, styled text, code identifiers and user identifiers
+  (object types 3, 7, 8, 9, 10, 11, 12) were never put in the ref table, so
+  a later reference to one of them by RefID missed: the loader read the
+  next object instead, reported "RefID doesn't match" and used `nil`
+  (`delay 0.1` decompiled as `(delay )`, or the load failed with "Too many
+  RefID errors"). `loadObjectBody()` now registers any object that carries
+  a RefID and isn't registered yet.
 
 ## 0.2.0 (2026-11-21)
 
