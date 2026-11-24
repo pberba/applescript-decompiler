@@ -50,6 +50,13 @@ package on `sys.path`.
   operator, a lost statement or a renamed variable does.
 - **Never run fixtures or decompiled scripts.** Fixtures may have side
   effects; the tests only compile.
+- **No malware-like content in tests, fixtures or docs**, not even inert or
+  encoded: EDR on the machine of anyone who clones or tests the repo could
+  flag it. Test obfuscation techniques (ciphers, `character id`, text item
+  delimiters, decoder handlers, `run script` stages) with harmless payloads
+  (`echo`, `/tmp` paths, `.invalid` URLs). No password prompts, credential or
+  keychain access, uploads, download-and-run, persistence or sandbox checks.
+  Keep real samples outside the repo.
 - `tests/test_ast_api.py`: the AST is used as a library
   ([AEMonitor](https://github.com/pberba/AEMonitor) builds nodes and calls
   `.to_source()`). Keep that API and its printed output stable.

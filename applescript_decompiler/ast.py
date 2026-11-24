@@ -22,6 +22,27 @@ for _i in range(0, len(DATA) - 3, 4):
     ):
         STANDARD_ADDITIONS_TERMS.setdefault(DATA[_i].strip("'"), DATA[_i + 1])
 
+# parameters of the core commands (make, duplicate, …), by command name, for
+# apps whose bundled sdef doesn't define the command
+CORE_PARAMS = {}
+for _i in range(0, len(DATA) - 3, 4):
+    if DATA[_i + 3] == "AppleScript Language" and DATA[_i + 2].startswith("Parameter of command: "):
+        _cmd = DATA[_i + 2][len("Parameter of command: "):]
+        CORE_PARAMS.setdefault(_cmd, {}).setdefault(DATA[_i].strip("'"), DATA[_i + 1])
+
+# labels a handler takes without `given`: `on rangeSum from a thru b`
+PREPOSITIONS = {
+    code: name for code, name in CORE_PARAMS.get("Call&#149subroutine", {}).items()
+    if code not in ("givn", "with", "wout")
+}
+
+
+def split_labeled(labeled):
+    """(prepositional labels, `given` labels), keeping each group's order."""
+    prep = [(l, v) for l, v in labeled if isinstance(l, Keyword) and l.value in PREPOSITIONS]
+    given = [(l, v) for l, v in labeled if not (isinstance(l, Keyword) and l.value in PREPOSITIONS)]
+    return prep, given
+
 # considering/ignoring attributes, stored as 'cons' + attribute code
 CONSIDERATIONS = {
     "conscase": "case",
@@ -53,6 +74,7 @@ def identifier(name):
 class AppleScriptPrinter:
     target = DEFAULT_TARGET
     command = "None"
+    core_params = {}  # parameters of the core command being printed, if any
     analyzer = None
 
     def __init__(self, analyzer=None):
@@ -117,6 +139,22 @@ class AppleScriptPrinter:
         if isinstance(_node_name, rto.Object):
             val = _node_name.value
             if isinstance(val, rto.EventIdentifier):
+                code = number_to_code(val.identifier[0]) + number_to_code(val.identifier[1])
+                event = SDEFS[STANDARD_ADDITIONS].get(code)
+                if event is not None:
+                    # a Standard Additions event (`on open location theURL`,
+                    # `on adding folder items to f after receiving items`):
+                    # the direct parameter and labels are written in words
+                    names = event["parameters"]
+                    header = f"{self._i(indent)}on {event['name']}"
+                    if node.parameters:
+                        header += " " + identifier(node.parameters[0])
+                    for label, var in node.labeled:
+                        word = names.get(label.value) if isinstance(label, Keyword) else None
+                        header += f" {word or self.visit(label, 0)} {identifier(var)}"
+                    body = "\n".join(self.visit(stmt, indent + 1) for stmt in node.body)
+                    footer = f"{self._i(indent)}end {event['name']}"
+                    return f"{header}\n{body}\n{footer}" if body else f"{header}\n{footer}"
                 _name = val.identifier[1].to_bytes(4, "big").decode("ascii")
                 _node_name = EVENT_CODES[DEFAULT_TARGET].get(_name[:4], _name)
             else:
@@ -127,9 +165,13 @@ class AppleScriptPrinter:
             _node_name = identifier(_node_name)
 
         if node.labeled:
-            params = " given " + ", ".join(
-                f"{self.visit(label, 0)}:{identifier(var)}" for label, var in node.labeled
-            )
+            prep, given = split_labeled(node.labeled)
+            params = " of " + identifier(node.parameters[0]) if node.parameters else ""
+            params += "".join(f" {PREPOSITIONS[label.value]} {identifier(var)}" for label, var in prep)
+            if given:
+                params += " given " + ", ".join(
+                    f"{self.visit(label, 0)}:{identifier(var)}" for label, var in given
+                )
 
         header = f"{self._i(indent)}on {_node_name}{params}"
 
@@ -155,12 +197,22 @@ class AppleScriptPrinter:
                 target_src = target_src + "'s"
             target_src = target_src + " "
         if node.labeled:
-            given = ", ".join(
-                f"{self.visit(label, 0)}:{self.visit(value, 0)}" for label, value in node.labeled
-            )
-            # parenthesised: as an argument (`log (f given x:1)`), `given`
+            prep, given = split_labeled(node.labeled)
+
+            def arg(value):
+                src = self.visit(value, 0)
+                simple = isinstance(value, (StringLiteral, NumberLiteral, BooleanLiteral, VariableRef))
+                return src if simple or src.startswith("(") else f"({src})"
+
+            call = node.handler_name
+            if args:
+                call += " of " + arg(node.arguments[0])
+            call += "".join(f" {PREPOSITIONS[label.value]} {arg(value)}" for label, value in prep)
+            if given:
+                call += " given " + ", ".join(f"{self.visit(label, 0)}:{arg(value)}" for label, value in given)
+            # parenthesised: as an argument (`log (f given x:1)`), the labels
             # would otherwise bind to the enclosing command
-            return f"{self._i(indent)}({target_src}{node.handler_name} given {given})"
+            return f"{self._i(indent)}({target_src}{call})"
         _name = node.handler_name
         if _name in AS_TERMS:
             _name = f"|{_name}|"
@@ -357,6 +409,8 @@ class AppleScriptPrinter:
             params = SDEFS[self.target].get(self.command, {}).get("parameters", {})
             if node.value in params:
                 return params[node.value]
+        if node.value in self.core_params:  # e.g. System Events' `make … at`
+            return self.core_params[node.value]
 
         if node.value in SDEFS[STANDARD_ADDITIONS]:
             return f"{SDEFS[STANDARD_ADDITIONS][node.value]['name']}"
@@ -377,6 +431,13 @@ class AppleScriptPrinter:
             return ENUMERATORS[node.value]
         if len(node.value) == 8 and node.value[4:] in ENUMERATORS:
             return ENUMERATORS[node.value[4:]]
+        if any(not 0x20 <= ord(ch) <= 0x7E for ch in node.value):
+            # a code that isn't text and isn't in a bundled dictionary; it needs
+            # the app's sdef (APPLESCRIPT_DECOMPILER_SDEF_DIR) to print as a term
+            head, tail = node.value[:4], node.value[4:]
+            if all(0x20 <= ord(ch) <= 0x7E for ch in head) and tail:
+                return f"«constant {head} 0x{tail.encode('latin-1').hex().upper()}»"
+            return f"«constant 0x{node.value.encode('latin-1').hex().upper()}»"
         return f"{node.value}"
 
     def visit_NumberLiteral(self, node: NumberLiteral, indent: int = 0) -> str:
@@ -513,10 +574,11 @@ class AppleScriptPrinter:
             return f"-({operand})"
         elif node.op is UnaryOpKind.NOT:
             return f"not ({operand})"
-        elif node.op is UnaryOpKind.BEGINNING_OF:
-            return f"beginning of ({operand})"
-        elif node.op is UnaryOpKind.END_OF:
-            return f"end of ({operand})"
+        elif node.op in (UnaryOpKind.BEGINNING_OF, UnaryOpKind.END_OF):
+            word = "beginning" if node.op is UnaryOpKind.BEGINNING_OF else "end"
+            if operand == "__it__":
+                return word  # `make … at end`: the end of the tell target
+            return f"{word} of ({operand})"
         elif node.op is UnaryOpKind.REFERENCE_TO:
             return f"a reference to ({operand})"
         elif node.op is UnaryOpKind.MIDDLE:
@@ -531,6 +593,8 @@ class AppleScriptPrinter:
     def visit_CommandCall(self, node: CommandCall, indent: int = 0) -> str:
         prev_command = self.command
         prev_target = self.target
+        prev_core_params = self.core_params
+        self.core_params = {}
 
         # an application name (e.g. "System Events"), used as is
         _target_name = (
@@ -549,6 +613,7 @@ class AppleScriptPrinter:
             _command_name = f"{SDEFS[STANDARD_ADDITIONS][node.command_name]['name']}"
         elif node.command_name[4:] in EVENT_CODES[DEFAULT_TARGET]:
             _command_name = f"{EVENT_CODES[DEFAULT_TARGET][node.command_name[4:]]}"
+            self.core_params = CORE_PARAMS.get(_command_name, {})
 
         args_src = [self.visit(arg, 0) for arg in node.arguments]
         if args_src and args_src[0] == "__it__":
@@ -560,6 +625,7 @@ class AppleScriptPrinter:
 
         self.command = prev_command
         self.target = prev_target
+        self.core_params = prev_core_params
 
         if node.command_name == "error":
             # `error` is a statement, not an expression: no parentheses
@@ -946,7 +1012,9 @@ class CommandCall(Expression):
 
 def number_to_code(num):
     num_bytes = (num.bit_length() + 7) // 8
-    return num.to_bytes(num_bytes, "big").decode("ascii")
+    # latin-1 keeps every byte: some enumerator codes aren't text (Office's
+    # 'e188' + 0x02BC0039 is an enumeration code and a number)
+    return num.to_bytes(num_bytes, "big").decode("latin-1")
 
 
 def convert_reference(spec):
@@ -985,6 +1053,9 @@ def convert_literal(lit, target=None):
     if isinstance(lit, list) and len(lit) == 2 and lit[0] == 20 and isinstance(lit[1], list):
         # stored reference, e.g. `property P : a reference to current application's NSString`
         return UnaryOp(op=UnaryOpKind.REFERENCE_TO, operand=convert_reference(lit[1]))
+    if isinstance(lit, list) and len(lit) >= 3 and lit[0] in (21, 22, 24):
+        # a specifier the compiler built from constants, e.g. `class of "x"`
+        return convert_reference(lit)
     if isinstance(lit, list) and len(lit) == 3 and lit[0] == 4 and isinstance(lit[2], list):
         # list value: [4, count, [?, item, item, ...]]
         return ListLiteral(elements=[convert_literal(e) for e in lit[2][1:]])
@@ -1018,6 +1089,9 @@ def convert_literal(lit, target=None):
         return VariableRef(name=lit.decode())
     elif isinstance(lit, rto.String):
         return StringLiteral(value=lit.value.decode("utf-16-be"))
+    elif isinstance(lit, rto.UnicodeText):
+        # styled text from old Script Editor files: MacRoman bytes plus a style
+        return StringLiteral(value=bytes(lit.text).decode("mac_roman"))
     elif isinstance(lit, rto.RawData):
         return RawDataLiteral(type=lit.value[:4].decode("mac_roman"), data=bytes(lit.value[4:]))
     elif isinstance(lit, db.Descriptor):

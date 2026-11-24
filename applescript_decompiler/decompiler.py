@@ -165,6 +165,10 @@ def decompile_script(
         _args = []
         if isinstance(args, list) and len(args) >= 3 and isinstance(args[2], list):
             _args = args[2][1:]
+        elif isinstance(args, bytes):
+            # an event handler's direct parameter (`on run argv`, `on open
+            # theFiles`) is stored as a bare name, not a list
+            _args = [args]
         _arg_names = ", ".join(a.decode() if isinstance(a, bytes) else str(a) for a in _args)
         _info(f"-- Function: {handler_label(name)}({_arg_names})")
 
@@ -348,7 +352,9 @@ def decompile_script(
                 v = word() if "Extended" in op else (c & 0xF)
                 _comment += str(literal(v))
                 use_global(literal(v))
-                _var = VariableRef(literal(v).decode())
+                # a term such as `result` is a constant, not a name
+                v = literal(v)
+                _var = VariableRef(v.decode()) if isinstance(v, bytes) else convert_literal(v)
             elif op in ["PopVariable", "PopVariableExtended"]:
                 v = variable(word() if "Extended" in op else (c & 0xF))
                 _comment += str(v) + " "
@@ -1011,6 +1017,7 @@ def decompile_script(
                 n.decode()
                 for n in local_names
                 if isinstance(n, bytes) and n.decode() not in _bound and n not in _args
+                and n.decode() not in {v for _, v in _labeled}  # `after receiving theItems`
             ]
             if _declared:
                 block_stack[0].body.insert(0, VariableDeclaration(names=_declared))
