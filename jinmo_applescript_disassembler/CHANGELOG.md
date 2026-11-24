@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.2.1 (2026-11-24)
+
+Bug fixes needed by the decompiler (`applescript_decompiler`).
 
 ### Loader (`engine`)
 

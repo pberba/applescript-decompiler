@@ -1,5 +1,42 @@
 # Changelog
 
+## 2.0.1 (2026-11-24)
+
+Bug fixes. Each fix has a test script that failed before it.
+
+### Fixed
+
+Output that compiled to a different script, or didn't compile:
+
+- **Event handlers.** `on run argv` and `on open theFiles` keep their
+  direct parameter. Standard Additions handlers are named
+  (`on open location theURL`, `on adding folder items to f after
+  receiving theItems`) instead of printed as raw codes.
+- **Handler labels.** Prepositional labels are written directly
+  (`on rangeSum from a thru b`, `rangeSum from 1 thru 4`), not after
+  `given`.
+- **Terminology.** `running` and the `progress` properties are named;
+  enumerators are named by their enumeration (`path to desktop folder
+  from user domain`), including codes written in hex (`with icon
+  caution`); `make … at end` works for apps whose dictionary doesn't
+  define `make` (System Events).
+- **Values.** References the compiler builds from constants
+  (`class of "x"`) and styled text literals from old Script Editor files
+  are no longer dropped.
+- **Crashes** on `set result to …` and on enumerator codes that aren't
+  text (Office's `'e188' + 0x02BC0039`). With no dictionary for such a
+  code it prints as `«constant e188 0x02BC0039»`, which AppleScript can't
+  compile; add the app's sdef to `APPLESCRIPT_DECOMPILER_SDEF_DIR` to get
+  the term.
+
+### Disassembler
+
+The vendored disassembler is now 0.2.1: RefID errors go to stderr, and
+back-references to integers, reals, booleans, styled text and
+identifiers resolve. See
+[jinmo_applescript_disassembler/CHANGELOG.md](jinmo_applescript_disassembler/CHANGELOG.md).
+The dependency on it is pinned to the `v2.0.1` tag.
+
 ## 2.0.0 (2026-11-21)
 
 Decompiled run-only AppleScripts now compile, and recompile to the same
